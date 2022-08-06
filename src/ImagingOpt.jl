@@ -1,10 +1,11 @@
 module ImagingOpt
 
     export PhysicsParams, RecoveryParams, ImagingParams, OptimizeParams, JobParams
-    export prepare_physics, prepare_objects, prepare_geoms
+    export prepare_physics, prepare_objects, prepare_geoms, prepare_blackbody, permittivity, prepare_surrogate
     export Gop
     export geoms_to_far, far_to_PSFs, PSFs_to_G, G_to_est, est_to_mse, loss
     export read_params, get_params, run_opt, get_smalls, test_init, test_grad_init, test_psf, test_matrix, get_raw, getG_init, print_res, run_psfopt
+    export arrarr_to_multi
 
     using FFTW
     using UUIDs
@@ -33,9 +34,11 @@ module ImagingOpt
     using Augmentor
     using TestImages
     using MAT
+    using FastChebInterp
+    using QuadratureRules
     
     using WavePropagation
-    using ImplicitAdjoints
+    #using ImplicitAdjoints
 
     include("prepare.jl")
     include("utils.jl")
