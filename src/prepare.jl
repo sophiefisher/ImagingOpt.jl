@@ -77,10 +77,16 @@ function prepare_objects(imgp::ImagingParams, pp::PhysicsParams)
     if imgp.object_type == "uniform"
         lbT = imgp.object_data[1]
         ubT = imgp.object_data[2]
-        
         random_object = function()
-            T = rand(lbT:ubT)
+            T = rand(lbT:eps():ubT)
             Tmap = fill(T, imgp.objL, imgp.objL);
+        end
+    elseif imgp.object_type == "random"
+        Random.seed!(1)
+        lbT = imgp.object_data[1]
+        ubT = imgp.object_data[2]
+        random_object = function()
+            Tmap = rand(lbT:eps():ubT,imgp.objL, imgp.objL)
         end
     end
     

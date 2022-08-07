@@ -27,8 +27,8 @@
         "imgL": 256,
         "binL": 1,
         "objN": 1,
-        "object_type": "uniform",
-        "object_data": [290,300]
+        "object_type": "random",
+        "object_data": [280,310]
     },
     "optp": {
         "init":"uniform"
