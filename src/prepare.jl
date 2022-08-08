@@ -77,20 +77,25 @@ function prepare_objects(imgp::ImagingParams, pp::PhysicsParams)
     if imgp.object_type == "uniform"
         lbT = imgp.object_data[1]
         ubT = imgp.object_data[2]
-        random_object = function()
+        random_object = function(seed = nothing)
+            if ! isnothing(seed)
+                Random.seed!(seed)
+            end
             T = rand(lbT:eps():ubT)
             Tmap = fill(T, imgp.objL, imgp.objL);
         end
     elseif imgp.object_type == "random"
-        Random.seed!(1)
         lbT = imgp.object_data[1]
         ubT = imgp.object_data[2]
-        random_object = function()
+        random_object = function(seed = nothing)
+            if ! isnothing(seed)
+                Random.seed!(seed)
+            end
             Tmap = rand(lbT:eps():ubT,imgp.objL, imgp.objL)
         end
     end
     
-    Tmaps = [random_object() for _ in 1:imgp.objN]
+    Tmaps = [random_object(i) for i in 1:imgp.objN]
     Tmaps
     #still need to add noise
 end
