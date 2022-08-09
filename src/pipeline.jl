@@ -9,7 +9,7 @@ function geoms_to_far(geoms, surrogate, incident, n2f_kernel, freq)
     freqstmp = repeat([freq,], gridL, gridL)
 
     surtmp = Zygote.ignore(() -> repeat([surrogate], inner=(gridL, gridL)) ) #TODO why Zygote.ignore?
-    trans = map(to_trans, geomstmp, freqstmp, surtmp); #TODO why not pmap here?
+    trans = map(to_trans, geomstmp, freqstmp, surtmp); #TODO pmap
     
     near = incident .* trans #broadcasting
     

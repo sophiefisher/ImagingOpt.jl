@@ -3,8 +3,8 @@ module ImagingOpt
     export PhysicsParams, RecoveryParams, ImagingParams, OptimizeParams, JobParams
     export prepare_physics, prepare_objects, prepare_geoms, prepare_blackbody, permittivity, prepare_surrogate
     export Gop
-    export geoms_to_far, far_to_PSFs, PSFs_to_G, G_to_est, est_to_mse, loss
-    export read_params, get_params, run_opt, get_smalls, test_init, test_grad_init, test_psf, test_matrix, get_raw, getG_init, print_res, run_psfopt
+    export geoms_to_far, far_to_PSFs, PSFs_to_G
+    export get_params, test_forwardmodel, test_init, test_forwardmodel_noinit, test_forwardmodel_perfreq_noinit
     export arrarr_to_multi
 
     using FFTW
@@ -36,7 +36,9 @@ module ImagingOpt
     using MAT
     using FastChebInterp
     using QuadratureRules
-    
+    using Profile
+    using StatProfilerHTML
+    using ProfileVega
     using WavePropagation
     #using ImplicitAdjoints
 
