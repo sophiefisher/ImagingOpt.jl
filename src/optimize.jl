@@ -51,7 +51,7 @@ function test_forwardmodel(pname)
     Tmaps = prepare_objects(imgp::ImagingParams, pp::PhysicsParams)
     Bs = prepare_blackbody(Tmaps, imgp::ImagingParams, pp::PhysicsParams)
     
-    surrogate = prepare_surrogate(pp)
+    surrogates = prepare_surrogate(pp)
     geoms = prepare_geoms(pp, optp.init)
     freqs = reverse(chebpoints(pp.orderfreqPSF, pp.lbfreq, pp.ubfreq))
     
@@ -59,8 +59,37 @@ function test_forwardmodel(pname)
     
     for iF in 1:nF
         freq = freqs[iF]
+        surrogate = surrogates[iF]
         incident, n2f_kernel = prepare_physics(pp, freq)
-        far, _, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel, freq)
+        far, _, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel)
+        PSFs = far_to_PSFs(far, psfL, imgp.binL)
+        G, _ = PSFs_to_G(PSFs, imgp.objL, imgp.imgL, nF, iF, pp.lbfreq, pp.ubfreq)
+        
+        for iO in 1:imgp.objN
+            y_temp = G * Bs[iO][:,:,iF][:]
+            y_temp = reshape(y_temp, (imgp.imgL,imgp.imgL))
+            ys[iO] = ys[iO] + y_temp
+        end
+    end
+    
+    ys
+    
+end
+
+function test_forwardmodel_noinit(params, Bs, surrogates, geoms, freqs)
+    pp = params.pp
+    imgp = params.imgp
+    optp = params.optp
+    psfL = imgp.objL + imgp.imgL
+    nF = pp.orderfreqPSF + 1
+    
+    ys = [zeros(imgp.imgL, imgp.imgL) for _ in 1:imgp.objN]
+    
+    for iF in 1:nF
+        freq = freqs[iF]
+        surrogate = surrogates[iF]
+        incident, n2f_kernel = prepare_physics(pp, freq)
+        far, _, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel)
         PSFs = far_to_PSFs(far, psfL, imgp.binL)
         G, _ = PSFs_to_G(PSFs, imgp.objL, imgp.imgL, nF, iF, pp.lbfreq, pp.ubfreq)
         
@@ -80,42 +109,12 @@ function test_init(pname)
     pp = params.pp
     imgp = params.imgp
     optp = params.optp
-    psfL = imgp.objL + imgp.imgL
-    nF = pp.orderfreqPSF + 1
     
-    Tmaps = prepare_objects(imgp::ImagingParams, pp::PhysicsParams)
-    Bs = prepare_blackbody(Tmaps, imgp::ImagingParams, pp::PhysicsParams)
+    Tmaps = prepare_objects(imgp, pp)
+    Bs = prepare_blackbody(Tmaps, imgp, pp)
     
-    surrogate = prepare_surrogate(pp)
+    surrogates = prepare_surrogate(pp)
     geoms = prepare_geoms(pp, optp.init)
-end
-
-
-function test_forwardmodel_noinit(params, Bs, surrogate, geoms, freqs)
-    pp = params.pp
-    imgp = params.imgp
-    optp = params.optp
-    psfL = imgp.objL + imgp.imgL
-    nF = pp.orderfreqPSF + 1
-    
-    ys = [zeros(imgp.imgL, imgp.imgL) for _ in 1:imgp.objN]
-    
-    for iF in 1:nF
-        freq = freqs[iF]
-        incident, n2f_kernel = prepare_physics(pp, freq)
-        far, _, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel, freq)
-        PSFs = far_to_PSFs(far, psfL, imgp.binL)
-        G, _ = PSFs_to_G(PSFs, imgp.objL, imgp.imgL, nF, iF, pp.lbfreq, pp.ubfreq)
-        
-        for iO in 1:imgp.objN
-            y_temp = G * Bs[iO][:,:,iF][:]
-            y_temp = reshape(y_temp, (imgp.imgL,imgp.imgL))
-            ys[iO] = ys[iO] + y_temp
-        end
-    end
-    
-    ys
-    
 end
 
 function test_forwardmodel_perfreq_noinit(params, Bs, surrogate, geoms, ys, freq, iF)
@@ -126,7 +125,7 @@ function test_forwardmodel_perfreq_noinit(params, Bs, surrogate, geoms, ys, freq
     nF = pp.orderfreqPSF + 1
     
     incident, n2f_kernel = prepare_physics(pp, freq)
-    far, _, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel, freq)
+    far, _, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel)
     PSFs = far_to_PSFs(far, psfL, imgp.binL)
     G, _ = PSFs_to_G(PSFs, imgp.objL, imgp.imgL, nF, iF, pp.lbfreq, pp.ubfreq)
 

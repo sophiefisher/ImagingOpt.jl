@@ -3,7 +3,7 @@
         "lbλ_μm":8,
         "ubλ_μm":12,
         "orderλ":640,
-        "orderλPSF":2,
+        "orderλPSF":20,
         
         "F_μm": 20000,
         "depth_μm":200000,

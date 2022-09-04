@@ -62,8 +62,8 @@ function prepare_physics(pp::PhysicsParams,freq::Float64)
 end
 
 function prepare_surrogate(pp::PhysicsParams)
-    surrogate = get_model(pp.materialsub, pp.materialg, pp.lbwidth, pp.lbfreq, pp.ubwidth, pp.ubfreq, pp.orderwidth, pp.orderfreq, pp.models_dir)
-    surrogate
+    model2D = get_model2D(pp.materialsub, pp.materialg, pp.lbwidth, pp.lbfreq, pp.ubwidth, pp.ubfreq, pp.orderwidth, pp.orderfreq, pp.models_dir)
+    models1D = get_models1D(model2D, pp.orderfreqPSF)
 end
 
 function prepare_geoms(pp::PhysicsParams, init::String) 
