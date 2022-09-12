@@ -4,7 +4,7 @@ module ImagingOpt
     export prepare_physics, prepare_objects, prepare_geoms, prepare_blackbody, permittivity, prepare_surrogate
     export Gop
     export geoms_to_far, far_to_PSFs, PSFs_to_G
-    export get_params, test_forwardmodel, test_init, test_forwardmodel_noinit, test_forwardmodel_perfreq_noinit
+    export get_params, test_init, test_forwardmodel_perfreq, test_forwardmodel, test_design_broadband_lens,  design_broadband_lens_objective
     export arrarr_to_multi
 
     using FFTW
@@ -40,6 +40,8 @@ module ImagingOpt
     using StatProfilerHTML
     using ProfileVega
     using WavePropagation
+    using ChainRulesCore
+    using StaticArrays
     #using ImplicitAdjoints
 
     include("prepare.jl")

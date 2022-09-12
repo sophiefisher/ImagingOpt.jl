@@ -1,20 +1,20 @@
 # Implementations of differentiable functions that form optimization pipeline
 
 function geoms_to_far(geoms, surrogate, incident, n2f_kernel)
-    gridL, _ = size(incident)
+    #=gridL, _ = size(incident)
     
     to_trans = (geom, surrogate) -> surrogate(geom)
     geomstmp = dropdims(geoms, dims=1)
 
     surtmp = Zygote.ignore(() -> repeat([surrogate], inner=(gridL, gridL)) ) #TODO why Zygote.ignore?
     trans = map(to_trans, geomstmp, surtmp); #TODO pmap
+    =#
+    near = incident .* surrogate.(dropdims(geoms,dims=1))
+  
     
-    near = incident .* trans #broadcasting
-    
-    to_far = (near_field, kernel) -> convolve(near_field, kernel)
-    
-    far = to_far(near, n2f_kernel);
-    (;far, near, trans)
+    #to_far = (near_field, kernel) -> convolve(near_field, kernel)
+    far = convolve(near, n2f_kernel);
+    (;far, near)
 end
 
 function far_to_PSFs(far, psfL, binL)

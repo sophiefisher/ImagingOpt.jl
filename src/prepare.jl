@@ -1,10 +1,9 @@
 struct PhysicsParams
     lbfreq::Float64 #lower bound of wavelength 
     ubfreq::Float64 #upper bound of wavelength 
-    orderfreq::Int #order of Chebyshev polynomial in λ; number of points is orderλ + 1
+    orderfreq::Int #order of Chebyshev polynomial in frequency; number of points is orderfreq + 1
     orderfreqPSF::Int 
     wavcen::Float64
-    
     
     F::Float64 #focal length 
     depth::Float64 #depth of depth plane 
@@ -36,9 +35,14 @@ struct OptimizeParams
     init::String
 end
 
+struct JobParams
+    pp::PhysicsParams
+    imgp::ImagingParams
+    optp::OptimizeParams
+end
+
 function permittivity(mat::String, pp::PhysicsParams)
     wavcen = pp.wavcen
-    
     if mat == "Si"
         function Si(freq)
             λ_μm = wavcen / freq
@@ -46,7 +50,6 @@ function permittivity(mat::String, pp::PhysicsParams)
         end 
         return Si
     end
-    
 end
     
 #TODO: have function (prepare_physics?) to process PhysicsParams into unit-less parameters, and provide center wavelength
@@ -63,10 +66,13 @@ end
 
 function prepare_surrogate(pp::PhysicsParams)
     model2D = get_model2D(pp.materialsub, pp.materialg, pp.lbwidth, pp.lbfreq, pp.ubwidth, pp.ubfreq, pp.orderwidth, pp.orderfreq, pp.models_dir)
-    models1D = get_models1D(model2D, pp.orderfreqPSF)
+    (;models1D, freqs) = get_models1D(model2D, pp.orderfreqPSF)
+    
 end
 
-function prepare_geoms(pp::PhysicsParams, init::String) 
+function prepare_geoms(params::JobParams)
+    init = params.optp.init
+    pp = params.pp
     if init == "uniform" #uniform width equal to half the lower bound and upper bound
         return fill((pp.lbwidth + pp.ubwidth)/2, 1, pp.gridL, pp.gridL)
     end
@@ -114,7 +120,6 @@ function prepare_blackbody(Tmaps, imgp::ImagingParams, pp::PhysicsParams)
         Tmap = Tmaps[i]
         Tmap_tmp = repeat(Tmap,1,1,pp.orderfreqPSF+1)
         Bs[i] = (2 .* freqs_tmp.^3 ) ./ (exp.(h .* (freqs_tmp .* c .* 10^6 ./ pp.wavcen) ./ (kb .* Tmap) ) .- 1)  ;
-
     end
     Bs
 end
