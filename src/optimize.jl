@@ -27,6 +27,7 @@ end
 StructTypes.StructType(::Type{PhysicsParams}) = StructTypes.Struct()
 StructTypes.StructType(::Type{ImagingParams}) = StructTypes.Struct()
 StructTypes.StructType(::Type{OptimizeParams}) = StructTypes.Struct()
+StructTypes.StructType(::Type{ReconstructionParams}) = StructTypes.Struct()
 StructTypes.StructType(::Type{JobParams}) = StructTypes.Struct()
 
 const PARAMS_DIR = "ImagingOpt.jl/params"
@@ -48,15 +49,19 @@ function get_params(pname)
     thicknessg = pptmp[:thicknessg_μm]/wavcen
     thickness_sub = pptmp[:thickness_sub_μm]/wavcen
     
-    pp = PhysicsParams(lbfreq, ubfreq, pptmp[:orderλ], pptmp[:orderλPSF], wavcen, F, depth, pptmp[:gridL], pptmp[:cellL_μm],lbwidth,ubwidth, pptmp[:orderwidth], thicknessg, pptmp[:materialg],  thickness_sub, pptmp[:materialsub], pptmp[:models_dir] )
+    pp = PhysicsParams(lbfreq, ubfreq, pptmp[:orderλ], wavcen, F, depth, pptmp[:gridL], cellL, lbwidth,ubwidth, pptmp[:orderwidth], thicknessg, pptmp[:materialg],  thickness_sub, pptmp[:materialsub], pptmp[:in_air],pptmp[:models_dir] )
     
     imgptmp = paramstmp[:imgp]
-    imgp = ImagingParams(imgptmp[:objL], imgptmp[:imgL], imgptmp[:binL], imgptmp[:objN], imgptmp[:object_type], imgptmp[:object_data])
+    imgp = ImagingParams(imgptmp[:objL], imgptmp[:imgL], imgptmp[:binL], imgptmp[:objN], imgptmp[:object_type], imgptmp[:object_data], imgptmp[:noise_level], imgptmp[:noise_abs], imgptmp[:emiss_noise_level])
     
     optptmp = paramstmp[:optp]
-    optp = OptimizeParams(optptmp[:init])
+    optp = OptimizeParams(optptmp[:geoms_init], optptmp[:geoms_init_data])
     
-    params = JobParams(pp, imgp, optp)
+    recptmp = paramstmp[:recp]
+    recp = ReconstructionParams(recptmp[:Tinit],recptmp[:Tinit_data],recptmp[:tol])
+    
+    
+    params = JobParams(pp, imgp, optp, recp)
 end
 
 function test_init(pname)
@@ -65,11 +70,11 @@ function test_init(pname)
     imgp = params.imgp
     optp = params.optp
     
-    Tmaps = prepare_objects(imgp, pp)
-    Bs = prepare_blackbody(Tmaps, imgp, pp)
-    
     surrogates, freqs = prepare_surrogate(pp)
     geoms = prepare_geoms(params)
+    
+    Tmaps = prepare_objects(imgp, pp)
+    Bs = prepare_blackbody(Tmaps, freqs, imgp, pp)
     
     ys = [zeros(imgp.imgL, imgp.imgL) for _ in 1:imgp.objN]
     (;pp, imgp, optp, Bs, surrogates, freqs, geoms, ys)
@@ -77,7 +82,7 @@ end
 
 function test_forwardmodel_perfreq(pp, imgp, Bs, surrogate, freq, iF, geoms, ys)
     psfL = imgp.objL + imgp.imgL
-    nF = pp.orderfreqPSF + 1
+    nF = pp.orderfreq + 1
     
     incident, n2f_kernel = prepare_physics(pp, freq)
     far, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel)
@@ -93,7 +98,7 @@ function test_forwardmodel_perfreq(pp, imgp, Bs, surrogate, freq, iF, geoms, ys)
 end
 
 function test_forwardmodel(pp, imgp, Bs, surrogates, freqs, geoms, ys)
-    nF = pp.orderfreqPSF + 1
+    nF = pp.orderfreq + 1
     for iF in 1:nF
         println(iF)
         flush(stdout)
@@ -104,7 +109,8 @@ function test_forwardmodel(pp, imgp, Bs, surrogates, freqs, geoms, ys)
     ys
 end
 
-function design_broadband_lens_objective(pp, imgp, surrogates, freqs, geoms)
+#=
+function design_broadband_lens_objective_average(pp, imgp, surrogates, freqs, geoms)
     psfL = imgp.objL + imgp.imgL
     middle = div(psfL,2)
     nF = pp.orderfreqPSF + 1
@@ -119,9 +125,18 @@ function design_broadband_lens_objective(pp, imgp, surrogates, freqs, geoms)
     end
 end
 
-function test_design_broadband_lens(pp, imgp, surrogates, freqs, geoms)
+function design_broadband_lens_objective(pp, imgp, surrogate, incident, n2f_kernel, geoms)
+    psfL = imgp.objL + imgp.imgL
+    middle = div(psfL,2)
+    far, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel)
+    PSF = far_to_PSFs(far, psfL, imgp.binL)
+    PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1]
+end
+
+
+function test_design_broadband_lens_average(pp, imgp, surrogates, freqs, geoms)
     #uniform metasurface
     geoms = fill((pp.lbwidth + pp.ubwidth)/2, 1, pp.gridL, pp.gridL)
     gradient(g -> design_broadband_lens_objective(pp, imgp, surrogates, freqs, g), geoms)
 end
-
+=#

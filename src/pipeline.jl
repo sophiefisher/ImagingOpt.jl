@@ -1,3 +1,30 @@
+function ChainRules.rrule(
+    config::RuleConfig{>:HasReverseMode}, ::typeof(ThreadsX.sum), f, xs::AbstractArray)
+    fx_and_pullbacks = ThreadsX.map(x->rrule_via_ad(config, f, x), xs)
+    y = ThreadsX.sum(first, fx_and_pullbacks)
+
+    pullbacks = ThreadsX.map(last, fx_and_pullbacks)
+
+    project = ProjectTo(xs)
+
+    function sum_pullback(ȳ)
+        call(f, x) = f(x)
+        # if dims is :, then need only left-handed only broadcast
+        # broadcast_ȳ = dims isa Colon  ? (ȳ,) : ȳ
+        broadcast_ȳ = ȳ
+        f̄_and_x̄s = ThreadsX.map(f->f(ȳ), pullbacks)
+        # no point thunking as most of work is in f̄_and_x̄s which we need to compute for both
+        f̄ = if fieldcount(typeof(f)) === 0 # Then don't need to worry about derivative wrt f
+            NoTangent()
+        else
+            ThreadsX.sum(first, f̄_and_x̄s)
+        end
+        x̄s = ThreadsX.map(unthunk ∘ last, f̄_and_x̄s) # project does not support receiving InplaceableThunks
+        return NoTangent(), f̄, project(x̄s)
+    end
+    return y, sum_pullback
+end
+
 # Implementations of differentiable functions that form optimization pipeline
 
 function geoms_to_far(geoms, surrogate, incident, n2f_kernel)
@@ -39,3 +66,127 @@ function PSFs_to_G(PSFs, objL, imgL, nF, iF, lbfreq, ubfreq)
 
     (;G, fftPSFs)
 end
+
+#=
+function make_images(pp, imgp, Bs::Vector, freqs, surrogates, geoms)
+    psfL = imgp.objL + imgp.imgL
+    nF = pp.orderfreqPSF + 1
+    ys = [zeros(imgp.imgL, imgp.imgL) for _ in 1:imgp.objN]
+    ys_noiseless = [zeros(imgp.imgL, imgp.imgL) for _ in 1:imgp.objN]
+    
+    for iF in 1:nF
+        freq = freqs[iF]
+        surrogate = surrogates[iF]
+        incident, n2f_kernel =  prepare_physics(pp, freq) 
+        far, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel)
+        PSF = far_to_PSFs(far, psfL, imgp.binL)
+        G, _ = PSFs_to_G(PSF, imgp.objL, imgp.imgL, nF, iF, freqs[1], freqs[end])
+        for iO in 1:imgp.objN
+            y_temp = G * Bs[iO][:,:,iF][:]
+            y_temp = reshape(y_temp, (imgp.imgL,imgp.imgL))
+            ys_noiseless[iO] = ys_noiseless[iO] + y_temp
+        end
+    end
+    #add nosie 
+    for iO in 1:imgp.objN
+        if imgp.noise_abs == true
+            ys[iO] = abs.(ys_noiseless[iO] .+ mean(ys_noiseless[iO])* imgp.noise_level .*randn.() )
+        else
+            ys[iO] = ys_noiseless[iO] .+ mean(ys_noiseless[iO])* imgp.noise_level .*randn.()
+        end
+    end
+    ys
+end
+=#
+
+function make_images(pp, imgp, B::Array, freqs, surrogates, geoms)
+    psfL = imgp.objL + imgp.imgL
+    nF = pp.orderfreq + 1
+    y = zeros(imgp.imgL, imgp.imgL) 
+    y_noiseless = zeros(imgp.imgL, imgp.imgL) 
+    
+    if imgp.emiss_noise_level != 0
+        emiss_noise = rand(imgp.objL^2) * imgp.emiss_noise_level
+    end
+    
+    for iF in 1:nF
+        freq = freqs[iF]
+        surrogate = surrogates[iF]
+        incident, n2f_kernel =  prepare_physics(pp, freq) 
+        far, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel)
+        PSF = far_to_PSFs(far, psfL, imgp.binL)
+        G, _ = PSFs_to_G(PSF, imgp.objL, imgp.imgL, nF, iF, freqs[1], freqs[end])
+        if imgp.emiss_noise_level != 0
+            y_temp = G * (B[:,:,iF][:] .* (1 .- emiss_noise) )
+        else
+            y_temp = G * B[:,:,iF][:] 
+        end
+        y_temp = reshape(y_temp, (imgp.imgL,imgp.imgL))
+        y_noiseless = y_noiseless + y_temp
+    end
+    #add nosie 
+    
+    if imgp.noise_abs == true
+        y = abs.(y_noiseless .+ mean(y_noiseless)* imgp.noise_level .*randn.() )
+    else
+        y = y_noiseless .+ mean(y_noiseless)* imgp.noise_level .*randn.()
+    end
+    y
+end
+
+#surrogates, freqs, geoms, α, Bs, noises
+#reconstruction
+function reconstruct_object(ygrid, Tmap, Tinit_flat, pp, imgp, optp, recp, freqs, surrogates, geoms, α, save::Bool=true, parallel::Bool=true)
+    nF = pp.orderfreq + 1
+    psfL = imgp.objL + imgp.imgL
+    noise_level = imgp.noise_level
+    xtol_rel = recp.tol
+    yflat = ygrid[:]
+    
+    function objective(Tflat::Vector)
+        Tgrid = reshape(Tflat, imgp.objL, imgp.objL)
+        Bgrid = prepare_blackbody(Tgrid, freqs, imgp, pp)
+
+        function forward(iF)
+            freq = freqs[iF]
+            surrogate = surrogates[iF]
+            incident, n2f_kernel = ChainRulesCore.ignore_derivatives( ()-> prepare_physics(pp, freq) )
+            far, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel)
+            PSF = far_to_PSFs(far, psfL, imgp.binL)
+            G, _ = PSFs_to_G(PSF, imgp.objL, imgp.imgL, nF, iF, freqs[1], freqs[end])
+            G * Bgrid[:,:,iF][:]
+        end
+        
+        if parallel==true
+            yflat_noiseless  = ThreadsX.sum(iF->forward(iF), 1:nF)
+        else
+            yflat_noiseless = sum(iF->forward(iF), 1:nF)
+        end
+        (yflat - yflat_noiseless)'*(yflat - yflat_noiseless) + α*Tflat'*Tflat
+    end
+    
+    function myfunc(Tflat::Vector, grad::Vector)
+        if length(grad) > 0
+            grad[:] = gradient( objective, Tflat )[1]
+        end
+        obj = objective(Tflat)
+        println(obj)
+        flush(stdout)
+        obj
+    end
+    
+    opt = Opt(:LD_LBFGS, imgp.objL^2)
+    opt.lower_bounds = repeat([3.0,], imgp.objL^2)
+    opt.xtol_rel = xtol_rel
+    opt.min_objective = myfunc
+    
+    (minf,minT,ret) = optimize(opt, Tinit_flat)
+    
+    if save==true
+        Tmaps_filename = @sprintf("ImagingOpt.jl/recdata/Tmap_%s_%s_%d_%d_%.2e_%.2f_%s_%.2e_%.2f.csv", imgp.object_data[4], optp.geoms_init_data[2],  imgp.objL, imgp.imgL, α, noise_level, string(imgp.noise_abs), xtol_rel, imgp.emiss_noise_level);
+        writedlm( Tmaps_filename,  hcat(minT, Tmap[:]),',')
+    end
+    (minf,minT,ret)
+end
+
+

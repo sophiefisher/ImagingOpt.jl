@@ -22,11 +22,11 @@ GopTranspose = LinearMaps.TransposeMap{<:Any, <:Gop} # TODO: make constant
 function Base.:(*)(G::Gop, uflat::AbstractVector)
     u = reshape(uflat, (G.objL, G.objL))
     to_y(obj_plane, kernel) = real.(convolve(obj_plane, kernel))
-    y = to_y(u, G.fftPSFs)
+    ytemp = to_y(u, G.fftPSFs)
     
     #multiply by quadrature weight
-    quadrature = ClenshawCurtisQuadrature(G.nF)
-    y = y .* quadrature.weights[G.iF] .* (G.ubfreq - G.lbfreq) 
+    quadrature = ChainRulesCore.ignore_derivatives( ()-> ClenshawCurtisQuadrature(G.nF) )
+    y = ytemp .* quadrature.weights[G.iF] .* (G.ubfreq - G.lbfreq) 
 
     y[:]
 end

@@ -1,9 +1,9 @@
 module ImagingOpt
 
     export PhysicsParams, RecoveryParams, ImagingParams, OptimizeParams, JobParams
-    export prepare_physics, prepare_objects, prepare_geoms, prepare_blackbody, permittivity, prepare_surrogate
+    export prepare_physics, prepare_objects, prepare_geoms, prepare_blackbody, permittivity, prepare_surrogate, prepare_reconstruction
     export Gop
-    export geoms_to_far, far_to_PSFs, PSFs_to_G
+    export geoms_to_far, far_to_PSFs, PSFs_to_G, make_images, reconstruct_object
     export get_params, test_init, test_forwardmodel_perfreq, test_forwardmodel, test_design_broadband_lens,  design_broadband_lens_objective
     export arrarr_to_multi
 
@@ -42,7 +42,12 @@ module ImagingOpt
     using WavePropagation
     using ChainRulesCore
     using StaticArrays
-    #using ImplicitAdjoints
+    using DelimitedFiles
+    using JuMP
+    using NLopt
+    using ThreadsX
+    using ChainRules
+    using ChainRules: RuleConfig, HasReverseMode, rrule_via_ad, ProjectTo, NoTangent, unthunk
 
     include("prepare.jl")
     include("utils.jl")
