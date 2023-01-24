@@ -64,7 +64,7 @@ function permittivity(mat::String, pp::PhysicsParams)
 end
     
 #TODO: have function (prepare_physics?) to process PhysicsParams into unit-less parameters, and provide center wavelength
-function prepare_physics(pp::PhysicsParams,freq::Float64)
+function prepare_physics(pp::PhysicsParams,freq::Float64, plan_nearfar::FFTW.cFFTWPlan)
     
     ϵsubfunc = permittivity(pp.materialsub,pp)
     ϵsub = ϵsubfunc(freq) 
@@ -75,7 +75,7 @@ function prepare_physics(pp::PhysicsParams,freq::Float64)
         incident = incident_field(pp.depth, freq, √(ϵsub), pp.gridL, pp.cellL)
     end
 
-    n2f_kernel = fft(greens(pp.F, freq, 1., 1., pp.gridL, pp.cellL)) 
+    n2f_kernel = plan_nearfar * greens(pp.F, freq, 1., 1., pp.gridL, pp.cellL)
     incident, n2f_kernel
 end
 
@@ -90,10 +90,10 @@ function prepare_geoms(params::JobParams)
     init = params.optp.geoms_init
     pp = params.pp
     if init == "uniform" #uniform width equal to half the lower bound and upper bound
-        return fill((pp.lbwidth + pp.ubwidth)/2, 1, pp.gridL, pp.gridL)
+        return fill((pp.lbwidth + pp.ubwidth)/2, pp.gridL, pp.gridL)
     elseif init == "load"
         filename = @sprintf("ImagingOpt.jl/geomsdata/%s",params.optp.geoms_init_data[1])
-        reshape(readdlm(filename,',',Float64),1,pp.gridL,pp.gridL)
+        reshape(readdlm(filename,',',Float64),pp.gridL,pp.gridL)
     end
 end
 

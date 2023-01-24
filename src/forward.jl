@@ -6,14 +6,15 @@ struct Gop <: LinearMap{Float64}
     iF::Int
     lbfreq::Float64
     ubfreq::Float64
+    plan::FFTW.cFFTWPlan
     padded::AbstractArray
 end   
 
 # TODO: as usual, type better
-function Gop(fftPSFs, objL, imgL, nF, iF, lbfreq, ubfreq)
+function Gop(fftPSFs, objL, imgL, nF, iF, lbfreq, ubfreq, plan)
     psfL = objL + imgL
     padded = Array{ComplexF64}(undef, psfL, psfL, nF)
-    Gop(fftPSFs, objL, imgL, nF, iF, lbfreq, ubfreq, padded) 
+    Gop(fftPSFs, objL, imgL, nF, iF, lbfreq, ubfreq, plan, padded) 
 end
 
 Base.size(G::Gop) = (G.imgL^2, G.objL^2) 
@@ -21,7 +22,7 @@ GopTranspose = LinearMaps.TransposeMap{<:Any, <:Gop} # TODO: make constant
     
 function Base.:(*)(G::Gop, uflat::AbstractVector)
     u = reshape(uflat, (G.objL, G.objL))
-    to_y(obj_plane, kernel) = real.(convolve(obj_plane, kernel))
+    to_y(obj_plane, kernel) = real.(convolve(obj_plane, kernel, G.plan))
     ytemp = to_y(u, G.fftPSFs)
     
     #multiply by quadrature weight

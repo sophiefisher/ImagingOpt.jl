@@ -27,7 +27,7 @@ end
 
 # Implementations of differentiable functions that form optimization pipeline
 
-function geoms_to_far(geoms, surrogate, incident, n2f_kernel)
+function geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar)
     #=gridL, _ = size(incident)
     
     to_trans = (geom, surrogate) -> surrogate(geom)
@@ -36,11 +36,11 @@ function geoms_to_far(geoms, surrogate, incident, n2f_kernel)
     surtmp = Zygote.ignore(() -> repeat([surrogate], inner=(gridL, gridL)) ) #TODO why Zygote.ignore?
     trans = map(to_trans, geomstmp, surtmp); #TODO pmap
     =#
-    near = incident .* surrogate.(dropdims(geoms,dims=1))
+    near = incident .* surrogate.(geoms)
   
     
     #to_far = (near_field, kernel) -> convolve(near_field, kernel)
-    far = convolve(near, n2f_kernel);
+    far = convolve(near, n2f_kernel, plan_nearfar);
     (;far, near)
 end
 
@@ -56,13 +56,13 @@ function far_to_PSFs(far, psfL, binL)
     PSFs
 end
 
-function PSFs_to_G(PSFs, objL, imgL, nF, iF, lbfreq, ubfreq)
+function PSFs_to_G(PSFs, objL, imgL, nF, iF, lbfreq, ubfreq, plan_PSF)
     psfL, _ = size(PSFs)
     PSFsC = complex.(PSFs) # needed because adjoint of fft does not project correctly
     
-    fftPSFs = planned_fft(PSFsC) 
+    fftPSFs = plan_PSF * PSFsC
     
-    G = Gop(fftPSFs, objL, imgL, nF, iF, lbfreq, ubfreq)
+    G = Gop(fftPSFs, objL, imgL, nF, iF, lbfreq, ubfreq, plan_PSF)
 
     (;G, fftPSFs)
 end
@@ -99,7 +99,7 @@ function make_images(pp, imgp, Bs::Vector, freqs, surrogates, geoms)
 end
 =#
 
-function make_images(pp, imgp, B::Array, freqs, surrogates, geoms)
+function make_images(pp, imgp, B::Array, freqs, surrogates, geoms, plan_nearfar, plan_PSF)
     psfL = imgp.objL + imgp.imgL
     nF = pp.orderfreq + 1
     y = zeros(imgp.imgL, imgp.imgL) 
@@ -112,10 +112,10 @@ function make_images(pp, imgp, B::Array, freqs, surrogates, geoms)
     for iF in 1:nF
         freq = freqs[iF]
         surrogate = surrogates[iF]
-        incident, n2f_kernel =  prepare_physics(pp, freq) 
-        far, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel)
+        incident, n2f_kernel =  prepare_physics(pp, freq, plan_nearfar) 
+        far, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar)
         PSF = far_to_PSFs(far, psfL, imgp.binL)
-        G, _ = PSFs_to_G(PSF, imgp.objL, imgp.imgL, nF, iF, freqs[1], freqs[end])
+        G, _ = PSFs_to_G(PSF, imgp.objL, imgp.imgL, nF, iF, freqs[1], freqs[end], plan_PSF)
         if imgp.emiss_noise_level != 0
             y_temp = G * (B[:,:,iF][:] .* (1 .- emiss_noise) )
         else
@@ -136,7 +136,7 @@ end
 
 #surrogates, freqs, geoms, α, Bs, noises
 #reconstruction
-function reconstruct_object(ygrid, Tmap, Tinit_flat, pp, imgp, optp, recp, freqs, surrogates, geoms, α, save::Bool=true, parallel::Bool=true)
+function reconstruct_object(ygrid, Tmap, Tinit_flat, pp, imgp, optp, recp, freqs, surrogates, geoms, plan_nearfar, plan_PSF, α, save::Bool=true, parallel::Bool=true)
     nF = pp.orderfreq + 1
     psfL = imgp.objL + imgp.imgL
     noise_level = imgp.noise_level
@@ -150,10 +150,10 @@ function reconstruct_object(ygrid, Tmap, Tinit_flat, pp, imgp, optp, recp, freqs
         function forward(iF)
             freq = freqs[iF]
             surrogate = surrogates[iF]
-            incident, n2f_kernel = ChainRulesCore.ignore_derivatives( ()-> prepare_physics(pp, freq) )
-            far, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel)
+            incident, n2f_kernel = ChainRulesCore.ignore_derivatives( ()-> prepare_physics(pp, freq, plan_nearfar) )
+            far, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar)
             PSF = far_to_PSFs(far, psfL, imgp.binL)
-            G, _ = PSFs_to_G(PSF, imgp.objL, imgp.imgL, nF, iF, freqs[1], freqs[end])
+            G, _ = PSFs_to_G(PSF, imgp.objL, imgp.imgL, nF, iF, freqs[1], freqs[end], plan_PSF)
             G * Bgrid[:,:,iF][:]
         end
         
