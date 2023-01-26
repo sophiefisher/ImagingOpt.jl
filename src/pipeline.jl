@@ -26,6 +26,22 @@ function ChainRules.rrule(
 end
 
 # Implementations of differentiable functions that form optimization pipeline
+#=
+function nearfield(incident, surrogate, geoms)
+    return incident .* surrogate.(geoms)
+end
+
+
+function ChainRulesCore.rrule(::typeof(nearfield), incident, surrogate, geoms)
+    out = map(incident, geoms) do i,g 
+        s, sderiv = chebgradient(surrogate,g)
+        s * i, sderiv * i
+    end
+    project_geom = ProjectTo(geoms)
+    pullback(y) = NoTangent(), NoTangent(), NoTangent(), project_geom(last.(out) .* y )
+    return first.(out), pullback
+end
+=#
 
 function geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar)
     #=gridL, _ = size(incident)
@@ -36,7 +52,7 @@ function geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar)
     surtmp = Zygote.ignore(() -> repeat([surrogate], inner=(gridL, gridL)) ) #TODO why Zygote.ignore?
     trans = map(to_trans, geomstmp, surtmp); #TODO pmap
     =#
-    near = incident .* surrogate.(geoms)
+    near = incident .* ThreadsX.map(surrogate,geoms)
   
     
     #to_far = (near_field, kernel) -> convolve(near_field, kernel)
@@ -136,7 +152,7 @@ end
 
 #surrogates, freqs, geoms, α, Bs, noises
 #reconstruction
-function reconstruct_object(ygrid, Tmap, Tinit_flat, pp, imgp, optp, recp, freqs, surrogates, geoms, plan_nearfar, plan_PSF, α, save::Bool=true, parallel::Bool=true)
+function reconstruct_object(ygrid, Tmap, Tinit_flat, pp, imgp, optp, recp, freqs, surrogates, geoms, plan_nearfar, plan_PSF, α, save::Bool=true)
     nF = pp.orderfreq + 1
     psfL = imgp.objL + imgp.imgL
     noise_level = imgp.noise_level
@@ -148,20 +164,17 @@ function reconstruct_object(ygrid, Tmap, Tinit_flat, pp, imgp, optp, recp, freqs
         Bgrid = prepare_blackbody(Tgrid, freqs, imgp, pp)
 
         function forward(iF)
-            freq = freqs[iF]
-            surrogate = surrogates[iF]
+            freq = ChainRulesCore.ignore_derivatives( freqs[iF])
+            surrogate = ChainRulesCore.ignore_derivatives(()-> surrogates[iF])
             incident, n2f_kernel = ChainRulesCore.ignore_derivatives( ()-> prepare_physics(pp, freq, plan_nearfar) )
-            far, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar)
-            PSF = far_to_PSFs(far, psfL, imgp.binL)
-            G, _ = PSFs_to_G(PSF, imgp.objL, imgp.imgL, nF, iF, freqs[1], freqs[end], plan_PSF)
+            far, _ = ChainRulesCore.ignore_derivatives( ()-> geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar) ) 
+            PSF = ChainRulesCore.ignore_derivatives( ()-> far_to_PSFs(far, psfL, imgp.binL) )
+            G, _ = ChainRulesCore.ignore_derivatives( ()-> PSFs_to_G(PSF, imgp.objL, imgp.imgL, nF, iF, freqs[1], freqs[end], plan_PSF) )
             G * Bgrid[:,:,iF][:]
         end
         
-        if parallel==true
-            yflat_noiseless  = ThreadsX.sum(iF->forward(iF), 1:nF)
-        else
-            yflat_noiseless = sum(iF->forward(iF), 1:nF)
-        end
+        yflat_noiseless  = ThreadsX.sum(iF->forward(iF), 1:nF)
+
         (yflat - yflat_noiseless)'*(yflat - yflat_noiseless) + α*Tflat'*Tflat
     end
     
