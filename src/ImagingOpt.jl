@@ -1,9 +1,9 @@
 module ImagingOpt
 
     export PhysicsParams, RecoveryParams, ImagingParams, OptimizeParams, JobParams
-    export prepare_physics, prepare_objects, prepare_geoms, prepare_blackbody, permittivity, prepare_surrogate, prepare_reconstruction
+    export prepare_incident, prepare_n2f_kernel, prepare_objects, prepare_geoms, prepare_blackbody, permittivity, prepare_surrogate, prepare_reconstruction
     export Gop
-    export geoms_to_far, far_to_PSFs, PSFs_to_G, make_images, reconstruct_object
+    export geoms_to_far, far_to_PSFs, PSFs_to_G, make_images, reconstruct_object, reconstruction_objective
     export get_params, test_init, test_forwardmodel_perfreq, test_forwardmodel, test_design_broadband_lens,  design_broadband_lens_objective
     export arrarr_to_multi
 

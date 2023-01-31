@@ -64,19 +64,19 @@ function permittivity(mat::String, pp::PhysicsParams)
 end
     
 #TODO: have function (prepare_physics?) to process PhysicsParams into unit-less parameters, and provide center wavelength
-function prepare_physics(pp::PhysicsParams,freq::Float64, plan_nearfar::FFTW.cFFTWPlan)
-    
-    ϵsubfunc = permittivity(pp.materialsub,pp)
-    ϵsub = ϵsubfunc(freq) 
-    
+function prepare_incident(pp::PhysicsParams,freq::Float64)
     if pp.in_air == "True"
         incident = incident_field(pp.depth, freq, 1, pp.gridL, pp.cellL)
     else
+        ϵsubfunc = permittivity(pp.materialsub,pp)
+        ϵsub = ϵsubfunc(freq) 
         incident = incident_field(pp.depth, freq, √(ϵsub), pp.gridL, pp.cellL)
     end
+    incident
+end
 
+function prepare_n2f_kernel(pp::PhysicsParams,freq::Float64, plan_nearfar::FFTW.cFFTWPlan)
     n2f_kernel = plan_nearfar * greens(pp.F, freq, 1., 1., pp.gridL, pp.cellL)
-    incident, n2f_kernel
 end
 
 function prepare_surrogate(pp::PhysicsParams)

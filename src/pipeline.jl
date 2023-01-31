@@ -43,7 +43,7 @@ function ChainRulesCore.rrule(::typeof(nearfield), incident, surrogate, geoms)
 end
 =#
 
-function geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar)
+function geoms_to_far(geoms::Matrix{Float64}, surrogate::FastChebInterp.ChebPoly{1, ComplexF64, Float64}, incident::Matrix{ComplexF64}, n2f_kernel::Matrix{ComplexF64}, plan_nearfar::FFTW.cFFTWPlan, parallel::Bool=true)
     #=gridL, _ = size(incident)
     
     to_trans = (geom, surrogate) -> surrogate(geom)
@@ -52,12 +52,16 @@ function geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar)
     surtmp = Zygote.ignore(() -> repeat([surrogate], inner=(gridL, gridL)) ) #TODO why Zygote.ignore?
     trans = map(to_trans, geomstmp, surtmp); #TODO pmap
     =#
-    near = incident .* ThreadsX.map(surrogate,geoms)
+    if parallel == true
+        near = incident .* ThreadsX.map(surrogate,geoms)
+    else
+        near = incident .* map(surrogate,geoms)
+    end
   
     
     #to_far = (near_field, kernel) -> convolve(near_field, kernel)
     far = convolve(near, n2f_kernel, plan_nearfar);
-    (;far, near)
+    far
 end
 
 function far_to_PSFs(far, psfL, binL)
@@ -80,7 +84,7 @@ function PSFs_to_G(PSFs, objL, imgL, nF, iF, lbfreq, ubfreq, plan_PSF)
     
     G = Gop(fftPSFs, objL, imgL, nF, iF, lbfreq, ubfreq, plan_PSF)
 
-    (;G, fftPSFs)
+    G
 end
 
 #=
@@ -128,10 +132,11 @@ function make_images(pp, imgp, B::Array, freqs, surrogates, geoms, plan_nearfar,
     for iF in 1:nF
         freq = freqs[iF]
         surrogate = surrogates[iF]
-        incident, n2f_kernel =  prepare_physics(pp, freq, plan_nearfar) 
-        far, _ = geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar)
+        incident =  prepare_incident(pp,freq) 
+        n2f_kernel =  prepare_n2f_kernel(pp,freq, plan_nearfar) 
+        far = geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar)
         PSF = far_to_PSFs(far, psfL, imgp.binL)
-        G, _ = PSFs_to_G(PSF, imgp.objL, imgp.imgL, nF, iF, freqs[1], freqs[end], plan_PSF)
+        G = PSFs_to_G(PSF, imgp.objL, imgp.imgL, nF, iF, freqs[1], freqs[end], plan_PSF)
         if imgp.emiss_noise_level != 0
             y_temp = G * (B[:,:,iF][:] .* (1 .- emiss_noise) )
         else
@@ -150,33 +155,17 @@ function make_images(pp, imgp, B::Array, freqs, surrogates, geoms, plan_nearfar,
     y
 end
 
-#surrogates, freqs, geoms, α, Bs, noises
+
 #reconstruction
-function reconstruct_object(ygrid, Tmap, Tinit_flat, pp, imgp, optp, recp, freqs, surrogates, geoms, plan_nearfar, plan_PSF, α, save::Bool=true)
+function reconstruct_object(ygrid, Tmap, Tinit_flat, pp, imgp, optp, recp, freqs, surrogates, geoms, plan_nearfar, plan_PSF, α, save::Bool=true, parallel::Bool=true)
     nF = pp.orderfreq + 1
     psfL = imgp.objL + imgp.imgL
     noise_level = imgp.noise_level
     xtol_rel = recp.tol
     yflat = ygrid[:]
     
-    function objective(Tflat::Vector)
-        Tgrid = reshape(Tflat, imgp.objL, imgp.objL)
-        Bgrid = prepare_blackbody(Tgrid, freqs, imgp, pp)
+    objective(Tflat::Vector) = reconstruction_objective(Tflat, yflat, pp, imgp, freqs, surrogates, geoms, plan_nearfar, plan_PSF, α, parallel)
 
-        function forward(iF)
-            freq = ChainRulesCore.ignore_derivatives( freqs[iF])
-            surrogate = ChainRulesCore.ignore_derivatives(()-> surrogates[iF])
-            incident, n2f_kernel = ChainRulesCore.ignore_derivatives( ()-> prepare_physics(pp, freq, plan_nearfar) )
-            far, _ = ChainRulesCore.ignore_derivatives( ()-> geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar) ) 
-            PSF = ChainRulesCore.ignore_derivatives( ()-> far_to_PSFs(far, psfL, imgp.binL) )
-            G, _ = ChainRulesCore.ignore_derivatives( ()-> PSFs_to_G(PSF, imgp.objL, imgp.imgL, nF, iF, freqs[1], freqs[end], plan_PSF) )
-            G * Bgrid[:,:,iF][:]
-        end
-        
-        yflat_noiseless  = ThreadsX.sum(iF->forward(iF), 1:nF)
-
-        (yflat - yflat_noiseless)'*(yflat - yflat_noiseless) + α*Tflat'*Tflat
-    end
     
     function myfunc(Tflat::Vector, grad::Vector)
         if length(grad) > 0
@@ -203,3 +192,29 @@ function reconstruct_object(ygrid, Tmap, Tinit_flat, pp, imgp, optp, recp, freqs
 end
 
 
+function reconstruction_objective(Tflat::Vector, yflat, pp, imgp, freqs, surrogates, geoms, plan_nearfar, plan_PSF, α, parallel::Bool=true, )
+    nF = pp.orderfreq + 1
+    psfL = imgp.objL + imgp.imgL
+    Tgrid = reshape(Tflat, imgp.objL, imgp.objL)
+    Bgrid = prepare_blackbody(Tgrid, freqs, imgp, pp)
+    
+
+    function forward(iF)
+        freq = ChainRulesCore.ignore_derivatives( freqs[iF])
+        surrogate = ChainRulesCore.ignore_derivatives(()-> surrogates[iF])
+        incident = ChainRulesCore.ignore_derivatives( ()-> prepare_incident(pp,freq) )
+        n2f_kernel = ChainRulesCore.ignore_derivatives( ()-> prepare_n2f_kernel(pp,freq, plan_nearfar) )
+        far = ChainRulesCore.ignore_derivatives( ()-> geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar, parallel) ) 
+        PSF = ChainRulesCore.ignore_derivatives( ()-> far_to_PSFs(far, psfL, imgp.binL) )
+        G = ChainRulesCore.ignore_derivatives( ()-> PSFs_to_G(PSF, imgp.objL, imgp.imgL, nF, iF, freqs[1], freqs[end], plan_PSF) )
+        G * Bgrid[:,:,iF][:]
+    end
+
+    if parallel == true
+        yflat_noiseless  = ThreadsX.sum(iF->forward(iF), 1:nF)
+    else
+        yflat_noiseless  = sum(iF->forward(iF), 1:nF)
+    end
+
+    (yflat - yflat_noiseless)'*(yflat - yflat_noiseless) + α*Tflat'*Tflat
+end

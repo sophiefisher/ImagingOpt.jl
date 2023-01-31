@@ -64,6 +64,10 @@ function get_params(pname)
     params = JobParams(pp, imgp, optp, recp)
 end
 
+
+
+
+#=
 function test_init(pname)
     params = get_params(pname)
     pp = params.pp
@@ -109,7 +113,7 @@ function test_forwardmodel(pp, imgp, Bs, surrogates, freqs, geoms, ys)
     ys
 end
 
-#=
+
 function design_broadband_lens_objective_average(pp, imgp, surrogates, freqs, geoms)
     psfL = imgp.objL + imgp.imgL
     middle = div(psfL,2)
