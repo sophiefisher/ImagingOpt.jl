@@ -1,3 +1,18 @@
+function G(ugrid, fftPSFs, weight, lbfreq, ubfreq, plan)
+    ytemp = real.(convolve(ugrid, fftPSFs, plan))
+    #multiply by quadrature weight
+    (ytemp .* weight .* (ubfreq - lbfreq) )[:]
+end
+
+function Gtranspose(ugrid, fftPSFs, weight, lbfreq, ubfreq, plan)
+    ytemp = real.(convolveT(ugrid, fftPSFs, plan))
+    #multiply by quadrature weight
+    (ytemp .* weight .* (ubfreq - lbfreq) )[:]
+end
+
+
+
+#=
 struct Gop <: LinearMap{Float64}
     fftPSFs::Matrix{ComplexF64}
     objL::Int
@@ -7,15 +22,7 @@ struct Gop <: LinearMap{Float64}
     lbfreq::Float64
     ubfreq::Float64
     plan::FFTW.cFFTWPlan
-    padded::Array{ComplexF64, 3}
 end   
-
-# TODO: as usual, type better
-function Gop(fftPSFs::Matrix{ComplexF64}, objL, imgL, nF, iF, lbfreq, ubfreq, plan)
-    psfL = objL + imgL
-    padded = Array{ComplexF64}(undef, psfL, psfL, nF) #if the dimension of this changes, change type of padded in Gop structure
-    Gop(fftPSFs, objL, imgL, nF, iF, lbfreq, ubfreq, plan, padded) 
-end
 
 Base.size(G::Gop) = (G.imgL^2, G.objL^2) 
 GopTranspose = LinearMaps.TransposeMap{<:Any, <:Gop} # TODO: make constant
@@ -34,3 +41,4 @@ function Base.:(*)(G::Gop, uflat::Vector{Float64})
 
     y[:]
 end
+=#

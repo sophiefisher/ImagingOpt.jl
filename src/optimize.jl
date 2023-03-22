@@ -32,39 +32,176 @@ StructTypes.StructType(::Type{JobParams}) = StructTypes.Struct()
 
 const PARAMS_DIR = "ImagingOpt.jl/params"
 
-function get_params(pname)
-    paramstmp = copy(JSON3.read(read("$PARAMS_DIR/$pname.json", String)) )
-    pptmp = paramstmp[:pp]
-    wavcen = round(1/mean([1/pptmp[:lbλ_μm], 1/pptmp[:ubλ_μm]]),digits=2)
+function get_params(pname, presicion)
     
-    lbfreq = wavcen/pptmp[:ubλ_μm]
-    ubfreq = wavcen/pptmp[:lbλ_μm]
+    if presicion == "double"
+        floattype = Float64
+        inttype = Int64
+    elseif presicion == "single"
+        floattype = Float32
+        inttype = Int32
+    end
     
-    lbwidth=pptmp[:lbwidth_μm]/wavcen 
-    ubwidth=pptmp[:ubwidth_μm]/wavcen 
+    jsonread = JSON3.read(read("$PARAMS_DIR/$pname.json", String))
+    pp_temp = jsonread.pp
+    pp = PhysicsParams{floattype, inttype}([pp_temp[key] for key in keys(pp_temp)]...)
     
-    F = pptmp[:F_μm]/wavcen
-    depth = pptmp[:depth_μm]/wavcen
-    cellL = pptmp[:cellL_μm]/wavcen
-    thicknessg = pptmp[:thicknessg_μm]/wavcen
-    thickness_sub = pptmp[:thickness_sub_μm]/wavcen
+    imgp_temp = jsonread.imgp
+    imgp = ImagingParams{floattype, inttype}([imgp_temp[key] for key in keys(imgp_temp)]...)
     
-    pp = PhysicsParams(lbfreq, ubfreq, pptmp[:orderλ], wavcen, F, depth, pptmp[:gridL], cellL, lbwidth,ubwidth, pptmp[:orderwidth], thicknessg, pptmp[:materialg],  thickness_sub, pptmp[:materialsub], pptmp[:in_air],pptmp[:models_dir] )
+    optp_temp = jsonread.optp
+    optp = OptimizeParams{floattype, inttype}([optp_temp[key] for key in keys(optp_temp)]...)
     
-    imgptmp = paramstmp[:imgp]
-    imgp = ImagingParams(imgptmp[:objL], imgptmp[:imgL], imgptmp[:binL], imgptmp[:objN], imgptmp[:object_type], imgptmp[:object_data], imgptmp[:noise_level], imgptmp[:noise_abs], imgptmp[:emiss_noise_level])
-    
-    optptmp = paramstmp[:optp]
-    optp = OptimizeParams(optptmp[:geoms_init], optptmp[:geoms_init_data])
-    
-    recptmp = paramstmp[:recp]
-    recp = ReconstructionParams(recptmp[:Tinit],recptmp[:Tinit_data],recptmp[:tol])
-    
-    
+    recp_temp = jsonread.recp
+    recp = ReconstructionParams{floattype}([recp_temp[key] for key in keys(recp_temp)]...)
     params = JobParams(pp, imgp, optp, recp)
 end
 
+function design_minimax_lens(pname, presicion="double", parallel=true, opt_name=:LD_MMA, num_iters=1000, opt_xtol_rel=1e-6, inequal_tol=1e-8, save_objective_data=true)
+    #assumptions: starting from a uniform metasurface
+    #single presicion not implemented currently
 
+    params = get_params(pname, presicion)
+    pp = params.pp
+    imgp = params.imgp
+    surrogates, freqs = prepare_surrogate(pp)
+    geoms_init = fill((pp.lbwidth + pp.ubwidth)/2, pp.gridL, pp.gridL);
+    #geoms_init =  rand(pp.lbwidth:eps():pp.ubwidth,pp.gridL, pp.gridL)
+    plan_nearfar = plan_fft!(zeros(Complex{typeof(freqs[1])}, (2*pp.gridL, 2*pp.gridL)), flags=FFTW.MEASURE)
+    plan_PSF = plan_fft!(zeros(Complex{typeof(freqs[1])}, (imgp.objL + imgp.imgL, imgp.objL + imgp.imgL)), flags=FFTW.MEASURE)
+    weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)
+
+    objective_iter_filename = @sprintf("geomsdata/minimax_objectivedata_%s_%d_%.2e_%d.csv",string(opt_name),pp.gridL,opt_xtol_rel,num_iters )
+
+    psfL = imgp.objL + imgp.imgL
+    middle = div(psfL,2)
+    nF = pp.orderfreq + 1
+
+    t_init = minimum(1:nF) do iF
+        PSF = get_PSF(freqs[iF], surrogates[iF], weights[iF], pp, imgp, geoms_init, plan_nearfar, parallel)
+        PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1]
+    end
+    x_init = [geoms_init[:]; t_init]
+
+    function myfunc(x::Vector, grad::Vector)
+        if length(grad) > 0
+            grad[1:end-1] = zeros(typeof(freqs[1]), pp.gridL^2)
+            grad[end] = 1
+        end
+        println(x[end])
+        flush(stdout)
+
+        if save_objective_data == true
+            open(objective_iter_filename, "a") do io
+                writedlm(io, x[end], ',')
+            end
+        end
+
+        x[end]
+    end
+
+    function design_broadband_lens_objective(freq, surrogate, weight, geoms)
+        PSF = get_PSF(freq, surrogate, weight, pp, imgp, geoms, plan_nearfar, parallel)
+        PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1]
+    end
+
+    function myconstraint(x::Vector, grad::Vector, iF)
+        geoms_grid = reshape(x[1:end-1], pp.gridL, pp.gridL)
+        freq = freqs[iF]
+        surrogate = surrogates[iF]
+        weight = weights[iF]
+        constraint = g -> design_broadband_lens_objective(freq, surrogate, weight, g)
+        if length(grad) > 0
+            grad[end] = 1
+            grad_grid = -1 * gradient( constraint, geoms_grid )[1]
+            grad[1:end-1] = grad_grid[:]
+        end
+        x[end] - constraint(geoms_grid)
+    end
+
+    opt = Opt(opt_name, pp.gridL^2 + 1)
+    opt.lower_bounds = [fill(pp.lbwidth,pp.gridL^2); -Inf]
+    opt.upper_bounds = [fill(pp.ubwidth,pp.gridL^2); Inf]
+    opt.max_objective = myfunc
+    for iF = 1:nF
+        inequality_constraint!(opt, (x,grad) -> myconstraint(x, grad, iF), inequal_tol)
+    end
+    opt.xtol_rel = opt_xtol_rel
+    opt.maxeval = num_iters
+
+    (maxf,maxx,ret) = optimize(opt, x_init)
+    geoms_filename = @sprintf("geomsdata/minimax_geoms_%s_%d_%.2e_%d.csv",string(opt_name),pp.gridL,xtol_rel,num_iters )
+    writedlm( geoms_filename,  maxx[1:end-1],',')
+    println(ret)
+end
+
+
+function run_opt(pname, presicion, parallel)
+    params = get_params(pname, presicion)
+    pp = params.pp
+    imgp = params.imgp
+    optp = params.optp
+    recp = params.recp
+    surrogates, freqs = prepare_surrogate(pp)
+    Tinit_flat = prepare_reconstruction(recp, imgp)
+    Tmaps = prepare_objects(imgp, pp)
+    
+    plan_nearfar = plan_fft!(zeros(Complex{typeof(freqs[1])}, (2*pp.gridL, 2*pp.gridL)), flags=FFTW.MEASURE)
+    plan_PSF = plan_fft!(zeros(Complex{typeof(freqs[1])}, (imgp.objL + imgp.imgL, imgp.objL + imgp.imgL)), flags=FFTW.MEASURE)
+    weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)
+    
+    function myfunc(parameters::Vector, grad::Vector)
+        start = time()
+        #parameters has geoms first, then reconstruction parameter alpha
+        geoms = reshape(parameters[1:end-1], pp.gridL, pp.gridL)
+        α = parameters[end]
+        
+        objective = convert(typeof(freqs[1]), 0)
+        grad[:] = zeros(typeof(freqs[1]), pp.gridL^2 + 1)
+        
+        for obji = 1:imgp.objN
+            Tmap = Tmaps[obji]
+            B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+            fftPSFs = [get_fftPSF(freqs[iF], surrogates[iF], weights[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel) for iF in 1:pp.orderfreq+1]
+            image_Tmap_grid = make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel);
+            Test_flat = reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, parallel)
+            
+            objective = objective +  (1/imgp.objN) * ( (Tmap[:] - Test_flat)'*(Tmap[:] - Test_flat) ) / (Tmap[:]' * Tmap[:])
+
+            term1plusterm2_hessian = term1plusterm2_hes(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, parallel);
+            H = Hes(pp.orderfreq + 1, pp.wavcen, imgp.objL, imgp.imgL, term1plusterm2_hessian, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, parallel)
+            b = 2 * (Tmap[:] - Test_flat) / (Tmap[:]' * Tmap[:])
+
+            lambda = zeros(typeof(freqs[1]), imgp.objL^2)
+            cg!(lambda, H, b);
+            if length(grad) > 0
+                grad[1:end-1] = grad[1:end-1] + ( (1/imgp.objN) * jacobian_vp(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, Tmap, parallel)[:] )
+                grad[end] = grad[end] + ( (1/imgp.objN) * 2 * lambda' * Test_flat )
+            end
+        end
+        elapsed = time() - start
+        println()
+        println(@sprintf("time elapsed = %f",elapsed))
+        println(@sprintf("OBJECTIVE VAL IS %f",objective) )
+        println()
+        flush(stdout)
+        objective
+    end
+    
+    opt = Opt(:LD_LBFGS, pp.gridL^2 + 1)
+    opt.min_objective = myfunc
+    
+    opt.lower_bounds = [repeat([ pp.lbwidth,], pp.gridL^2); eps()]
+    opt.upper_bounds = [repeat([ pp.ubwidth,], pp.gridL^2); Inf]
+    
+    opt.xtol_rel = optp.xtol_rel
+    opt.maxeval = optp.maxeval
+    
+    geoms_init = prepare_geoms(params)[:]
+    parameters_init = [geoms_init; optp.αinit]
+    
+    (minobj,minparams,ret) = optimize(opt, parameters_init)
+end
 
 
 #=

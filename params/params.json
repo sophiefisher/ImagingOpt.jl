@@ -6,7 +6,7 @@
         
         "F_μm": 20000,
         "depth_μm":200000,
-        "gridL": 500,
+        "gridL": 5000,
         
         "cellL_μm":4,
         "lbwidth_μm":1.8,
@@ -26,20 +26,28 @@
         "objL": 8,
         "imgL": 256,
         "binL": 1,
-        "objN": 1,
-        "object_type": "load_scale_single",
-        "object_data": ["oval8.csv",280,310,"oval"],
-        "noise_level": 0.05,
+        "objN": 2,
+        "object_type": "random",
+        "lbT":280,
+        "ubT":310,
+        "object_loadfilename":"oval8.csv",
+        "object_savefilestring":"random_280_310",
+        "noise_level": 0.0,
         "noise_abs":true,
         "emiss_noise_level":0.00
     },
     "optp": {
-        "geoms_init":"load",
-        "geoms_init_data": ["minimax_geoms_LD_MMA_2_inair=False_1.00e-06_500.csv","minimax_1.00e-06_500"]
+        "geoms_init_type":"uniform",
+        "geoms_init_loadfilename":"minimax_geoms_LD_MMA_2_inair=False_1.00e-06_500.csv",
+        "αinit":1e-7,
+        "maxeval":100,
+        "xtol_rel":1e-5
+        
     },
     "recp": {
-        "Tinit":"uniform",
-        "Tinit_data":[295],
-        "tol":1e-4
+        "T_init_type":"uniform",
+        "T_init_uniform_val":295,
+        "xtol_rel":1e-4,
+        "geoms_init_savefilestring":"minimax_1.00e-06_500"
     }
 }
