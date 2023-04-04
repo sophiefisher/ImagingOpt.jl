@@ -6,7 +6,7 @@
         
         "F_μm": 20000,
         "depth_μm":200000,
-        "gridL": 5000,
+        "gridL": 500,
         
         "cellL_μm":4,
         "lbwidth_μm":1.8,

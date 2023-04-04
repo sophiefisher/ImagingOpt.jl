@@ -48,6 +48,7 @@ module ImagingOpt
     using ThreadsX
     using ChainRules
     using ChainRules: RuleConfig, HasReverseMode, rrule_via_ad, ProjectTo, NoTangent, unthunk
+    using ThreadTools
 
     include("prepare.jl")
     include("utils.jl")
