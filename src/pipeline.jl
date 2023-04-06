@@ -26,55 +26,25 @@ function ChainRules.rrule(
 end
 
 
-function ChainRules.rrule(config::RuleConfig{>:HasReverseMode}, ::typeof(ThreadsX.map), f::F, xs::Tuple...) where {F}
-    println("HI")
-    println("HI")
-    flush(stdout)
-    length_y = minimum(length, xs)
-    #hobbits = ntuple(length_y) do i
-    #    args = getindex.(xs, i)
-    #    rrule_via_ad(config, f, args...)
-    #end
-    
-    function test1(i)
-        args = getindex.(xs, i)
-        rrule_via_ad(config, f, args...)
+function ChainRulesCore.rrule(config::RuleConfig{>:HasReverseMode}, ::typeof(ThreadsX.map), f, X::AbstractArray)
+    println("test")
+    hobbits = ThreadsX.map(X) do x  # this makes an array of tuples
+        y, back = rrule_via_ad(config, f, x)
     end
-    hobbits = Tuple( ThreadsX.map(test1, 1:length_y) ) 
-    
-    y = ThreadsX.map(first, hobbits)
-    num_xs = Val(length(xs))
-    paddings = ThreadsX.map(x -> ntuple(Returns(NoTangent()), (length(x) - length_y)), xs)
-    all(isempty, paddings) || @error """map(f, xs::Tuple...) does not allow mistmatched lengths!
-        But its `rrule` does; when JuliaLang/julia #42216 is fixed this warning should be removed."""
-    function map_pullback(dy_raw)
-        dy = unthunk(dy_raw)
-        # We want to call the pullbacks in `rrule_via_ad` in reverse sequence to the forward pass:
-        
-        #backevals = ntuple(length_y) do i
-        #    rev_i = length_y - i + 1
-        #    last(hobbits[rev_i])(dy[rev_i])
-        #end |> reverse
-        
-        function test2(i)
-            rev_i = length_y - i + 1
-            last(hobbits[rev_i])(dy[rev_i])
+    Y = map(first, hobbits)
+    function map_pullback(dY_raw)
+        dY = unthunk(dY_raw)
+        # Should really do these in the reverse order
+        backevals = ThreadsX.map(hobbits, dY) do (y, back), dy
+            dx, dx = back(dy)
         end
-        backevals = Tuple(reverse(ThreadsX.map(test2, 1:length_y) ) )
-        
-        # This df doesn't infer, could test Base.issingletontype(F), but it's not the only inference problem.
         df = ProjectTo(f)(ThreadsX.sum(first, backevals))
-        # Now unzip that. Because `map` like `zip` should when any `x` stops, some `dx`s may need padding.
-        # Although in fact, `map(+, (1,2), (3,4,5))` is an error... https://github.com/JuliaLang/julia/issues/42216
-        dxs = ntuple(num_xs) do k
-            dx_short = ThreadsX.map(bv -> bv[k+1], backevals)
-            ProjectTo(xs[k])((dx_short..., paddings[k]...))  # ProjectTo makes the Tangent for us
-        end
-        return (NoTangent(), df, dxs...)
+        dX = ThreadsX.map(last, backevals)
+        return (NoTangent(), df, dX)
     end
-    map_back(dy::AbstractZero) = (NoTangent(), NoTangent(), ntuple(Returns(NoTangent()), num_xs)...)
-    return y, map_pullback
+    return Y, map_pullback
 end
+
 
 # Implementations of differentiable functions that form optimization pipeline
 function nearfield(incident, surrogate, geoms, parallel)
@@ -416,7 +386,7 @@ function jacobian_vp_undiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
     function hi(iF)
         get_fftPSF(freqs[iF], surrogates[iF], weights[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel)
     end
-    fftPSFs = ThreadsX.map(hi, Tuple(1:nF))
+    fftPSFs = ThreadsX.map(hi, Array(1:nF))
 
     
     Test_grid = reshape(Test_flat, imgp.objL, imgp.objL)
