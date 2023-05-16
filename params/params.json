@@ -24,7 +24,7 @@
  
     "imgp": {
         "objL": 8,
-        "imgL": 256,
+        "imgL": 128,
         "binL": 1,
         "objN": 2,
         "object_type": "random",
@@ -33,7 +33,7 @@
         "object_loadfilename":"oval8.csv",
         "object_savefilestring":"random_280_310",
         "noise_level": 0.0,
-        "noise_abs":true,
+        "noise_abs":false,
         "emiss_noise_level":0.00
     },
     "optp": {

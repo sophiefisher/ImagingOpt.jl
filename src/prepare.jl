@@ -120,6 +120,9 @@ function prepare_geoms(params::JobParams)
     elseif init == "load"
         filename = @sprintf("ImagingOpt.jl/geomsdata/%s",params.optp.geoms_init_loadfilename )
         reshape(readdlm(filename,',',typeof(pp.lbfreq)),pp.gridL,pp.gridL)
+        
+    elseif init == "random"
+        return rand(pp.lbwidth:eps( typeof(pp.lbfreq) ):pp.ubwidth, pp.gridL, pp.gridL)
     end
 end
 

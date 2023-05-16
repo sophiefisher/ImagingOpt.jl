@@ -59,7 +59,7 @@ end
 
 function design_minimax_lens(pname, presicion="double", parallel=true, opt_name=:LD_MMA, num_iters=1000, opt_xtol_rel=1e-6, inequal_tol=1e-8, save_objective_data=true)
     #assumptions: starting from a uniform metasurface
-    #single presicion not implemented currently
+    #not sure if single presicion works
 
     params = get_params(pname, presicion)
     pp = params.pp
@@ -136,6 +136,10 @@ function design_minimax_lens(pname, presicion="double", parallel=true, opt_name=
 end
 
 
+#function design_singlefreq_lens()
+#end
+
+
 function run_opt(pname, presicion, parallel)
     params = get_params(pname, presicion)
     pp = params.pp
@@ -162,6 +166,8 @@ function run_opt(pname, presicion, parallel)
         for obji = 1:imgp.objN
             Tmap = Tmaps[obji]
             B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+            
+            #shouldn't this be outside the loop?
             fftPSFs = [get_fftPSF(freqs[iF], surrogates[iF], weights[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel) for iF in 1:pp.orderfreq+1]
             image_Tmap_grid = make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel);
             Test_flat = reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, parallel)
