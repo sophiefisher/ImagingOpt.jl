@@ -1,3 +1,4 @@
+#chain rule for threaded sum
 function ChainRules.rrule(
     config::RuleConfig{>:HasReverseMode}, ::typeof(ThreadsX.sum), f, xs::AbstractArray)
     fx_and_pullbacks = ThreadsX.map(x->rrule_via_ad(config, f, x), xs)
@@ -25,7 +26,7 @@ function ChainRules.rrule(
     return y, sum_pullback
 end
 
-
+#chain rule for threaded map
 function ChainRulesCore.rrule(config::RuleConfig{>:HasReverseMode}, ::typeof(ThreadsX.map), f, X::AbstractArray)
     hobbits = ThreadsX.map(X) do x  # this makes an array of tuples
         y, back = rrule_via_ad(config, f, x)
@@ -81,40 +82,31 @@ function geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar::FFTW
     far = convolve(near, n2f_kernel, plan_nearfar)
 end
 
-function far_to_PSFsnomean(far, psfL, binL)
+function far_to_PSF(far, psfL, binL, scaling, freq)
     gridL, _ = size(far)
     cropL = (gridL - psfL * binL) ÷ 2 # require binL * (objL + imgL) <= gridL
     farcrop = far[cropL + 1:gridL - cropL, cropL + 1:gridL - cropL];
     farcropbin = reshape(farcrop, (binL, psfL, binL, psfL))
     farcropbinmag = (abs.(farcropbin)).^2
-    PSFsbin = sum(farcropbinmag, dims=(1, 3))
-    PSFsnomean = dropdims(PSFsbin, dims=(1,3))
-end
-
-function PSFsnomean_to_PSFsmean(PSFsnomean)
-    PSFs = PSFsnomean ./ mean(PSFsnomean) # Normalize PSF values, allowing for different calibration values for different channels
-    PSFs
+    PSFbin = sum(farcropbinmag, dims=(1, 3))
+    PSF = scaling .* dropdims(PSFbin, dims=(1,3)) ./ freq
 end
     
-function far_to_PSFs(far, psfL, binL)
-    PSFsnomean = far_to_PSFsnomean(far, psfL, binL)
-    PSFs = PSFsnomean_to_PSFsmean(PSFsnomean)
+
+function PSF_to_fftPSF(PSF, plan_PSF)
+    fftPSF = plan_PSF * complex.(PSF) # needed because adjoint of fft does not project correctly
 end
 
-function PSFs_to_fftPSFs(PSFs, plan_PSF)
-    fftPSFs = plan_PSF * complex.(PSFs) # needed because adjoint of fft does not project correctly
-end
-
-function get_PSF(freq, surrogate, weight, pp, imgp, geoms, plan_nearfar, parallel)
+function get_PSF(freq, surrogate, pp, imgp, geoms, plan_nearfar, parallel)
     incident =  ChainRulesCore.ignore_derivatives( ()-> prepare_incident(pp,freq) ) 
     n2f_kernel =  ChainRulesCore.ignore_derivatives( ()-> prepare_n2f_kernel(pp,freq, plan_nearfar) )
     far = geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar, parallel)
-    PSF = far_to_PSFs(far, imgp.objL + imgp.imgL, imgp.binL)
+    PSF = far_to_PSF(far, imgp.objL + imgp.imgL, imgp.binL, pp.PSF_scaling, freq)
 end
 
-function get_fftPSF(freq, surrogate, weight, pp, imgp, geoms, plan_nearfar, plan_PSF, parallel)
-    PSF = get_PSF(freq, surrogate, weight, pp, imgp, geoms, plan_nearfar, parallel)
-    fftPSF = PSFs_to_fftPSFs(PSF, plan_PSF)
+function get_fftPSF(freq, surrogate, pp, imgp, geoms, plan_nearfar, plan_PSF, parallel)
+    PSF = get_PSF(freq, surrogate, pp, imgp, geoms, plan_nearfar, parallel)
+    fftPSF = PSF_to_fftPSF(PSF, plan_PSF)
 end
 
 function make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
@@ -150,26 +142,6 @@ function make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfa
     image_Tmap_grid
 end
 
-#=
-function reconstruction_objective(Test_flat::Vector, image_Tmap_flat, pp, imgp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, parallel::Bool=true)
-    nF = pp.orderfreq + 1
-    Test_grid = reshape(Test_flat, imgp.objL, imgp.objL)
-    B_Test_grid = prepare_blackbody(Test_grid, freqs, imgp, pp)
-
-    function forward(iF)
-        
-    end
-    
-    if parallel == true
-        image_Test_flat  = ThreadsX.sum(iF-> G(B_Test_grid[:,:,iF], fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
-    else
-        image_Test_flat  = sum(iF-> G(B_Test_grid[:,:,iF], fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
-    end
-    
-    (image_Tmap_flat - image_Test_flat)'*(image_Tmap_flat - image_Test_flat) + α*Test_flat'*Test_flat
-end
-=#
-
 
 function get_image_diff_flat(Test_flat, image_Tmap_flat, pp, imgp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel::Bool=true)
     nF = pp.orderfreq + 1
@@ -185,12 +157,12 @@ function get_image_diff_flat(Test_flat, image_Tmap_flat, pp, imgp, fftPSFs, freq
 end
 
 
-function reconstruction_objective_simplified(Test_flat, α, image_diff_flat)
-    image_diff_flat'*image_diff_flat + α*Test_flat'*Test_flat
+function reconstruction_objective_simplified(Test_flat, α, image_diff_flat, subtract_reg)
+    image_diff_flat'*image_diff_flat + α*( (Test_flat .- subtract_reg)'*(Test_flat .- subtract_reg) )
 end
 
 
-function dB_dT(T, freq, wavcen)
+function dB_dT(T, freq, wavcen, scaling)
     c = convert(typeof(freq),299792458)
     h = convert(typeof(freq),6.62607015e-34)
     kb = convert(typeof(freq),1.380649e-23)
@@ -198,10 +170,10 @@ function dB_dT(T, freq, wavcen)
     A = (h * c * 10^6)/(wavcen * kb)
     numerator = (2 * A * freq^4 * exp(A * freq / T) ) 
     denominator = T^2 * (exp(A * freq / T) - 1)^2
-    numerator/denominator
+    scaling * numerator/denominator
 end
 
-function d2B_dT2(T, freq, wavcen)
+function d2B_dT2(T, freq, wavcen, scaling)
     c = convert(typeof(freq),299792458)
     h = convert(typeof(freq),6.62607015e-34)
     kb = convert(typeof(freq),1.380649e-23)
@@ -209,15 +181,15 @@ function d2B_dT2(T, freq, wavcen)
     A = (h * c * 10^6)/(wavcen * kb)
     numerator = A * freq^4 * (-2*T + A * freq * coth(A*freq/(2*T) ) )
     denominator = T^4 * (-1 + cosh(A*freq/T) )
-    numerator/denominator
+    scaling * numerator/denominator
 end
 
-function gradient_reconstruction_T(Test_flat, image_diff_flat, α, pp, imgp, fftPSFs, freqs, plan_nearfar, plan_PSF, weights, parallel)
+function gradient_reconstruction_T(Test_flat, image_diff_flat, α, pp, imgp, recp, fftPSFs, freqs, plan_nearfar, plan_PSF, weights, parallel)
     nF = pp.orderfreq + 1
     image_diff_grid = reshape(image_diff_flat, imgp.imgL, imgp.imgL)
     
     function term2(iF)
-        dB_dT_diag = LinearAlgebra.Diagonal([ dB_dT(T, freqs[iF], pp.wavcen) for T in Test_flat])
+        dB_dT_diag = LinearAlgebra.Diagonal([ dB_dT(T, freqs[iF], pp.wavcen, pp.blackbody_scaling) for T in Test_flat])
         temp_term2 = Gtranspose( image_diff_grid,  fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF)
         dB_dT_diag * temp_term2
     end
@@ -228,8 +200,17 @@ function gradient_reconstruction_T(Test_flat, image_diff_flat, α, pp, imgp, fft
         term2  = sum(iF->term2(iF), 1:nF)
     end
 
-    2 * α * Test_flat + -2*term2
+    2 * α * (Test_flat .- recp.subtract_reg ) + -2*term2
     
+end
+        
+function gradient_reconstruction_T_autodiff(Test_flat::Vector, image_Tmap_flat, pp, imgp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, parallel)
+    function obj(Test_flat)
+        image_diff_flat = get_image_diff_flat(Test_flat, image_Tmap_flat, pp, imgp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+        reconstruction_objective_simplified(Test_flat, α, image_diff_flat, recp.subtract_reg)
+    end
+    
+    Zygote.gradient(obj, Test_flat)[1]
 end
 
 #reconstruction
@@ -239,9 +220,9 @@ function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, r
     
     get_image_diff_flat2(Test_flat) = get_image_diff_flat(Test_flat, image_Tmap_flat, pp, imgp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
     
-    reconstruction_objective_simplified2(Test_flat, image_diff_flat) = reconstruction_objective_simplified(Test_flat, α, image_diff_flat)
+    reconstruction_objective_simplified2(Test_flat, image_diff_flat, subtract_reg) = reconstruction_objective_simplified(Test_flat, α, image_diff_flat, subtract_reg)
     
-    gradient_reconstruction_T2(Test_flat, image_diff_flat) = gradient_reconstruction_T(Test_flat, image_diff_flat, α, pp, imgp, fftPSFs, freqs, plan_nearfar, plan_PSF, weights, parallel)
+    gradient_reconstruction_T2(Test_flat, image_diff_flat) = gradient_reconstruction_T(Test_flat, image_diff_flat, α, pp, imgp, recp, fftPSFs, freqs, plan_nearfar, plan_PSF, weights, parallel)
     
     #objective(Test_flat::Vector) = reconstruction_objective(Test_flat, image_Tmap_flat, pp, imgp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, parallel)
 
@@ -254,8 +235,8 @@ function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, r
             grad[:] = gradient_reconstruction_T2(Test_flat, image_diff_flat)
         end
         #obj = objective(Test_flat)
-        obj = reconstruction_objective_simplified2(Test_flat, image_diff_flat)
-        #println(obj)
+        obj = reconstruction_objective_simplified2(Test_flat, image_diff_flat, recp.subtract_reg)
+        println(obj)
         flush(stdout)
         obj
     end
@@ -299,7 +280,7 @@ function term1plusterm2_hes(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfa
     
     
     function term2hes_iF(iF)
-        Diagonal( d2B_dT2.(Test_flat, freqs[iF], pp.wavcen) .* Gtranspose(image_diff_grid, fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF) )
+        Diagonal( d2B_dT2.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) .* Gtranspose(image_diff_grid, fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF) )
     end
     
     if parallel == true
@@ -323,6 +304,7 @@ struct Hes{FloatType, IntType} <: LinearMap{FloatType}
     plan_nearfar::FFTW.cFFTWPlan{Complex{FloatType}, -1, true, 2, UnitRange{IntType}}
     plan_PSF::FFTW.cFFTWPlan{Complex{FloatType}, -1, true, 2, UnitRange{IntType}}
     weights::Vector{FloatType}
+    blackbody_scaling::FloatType
     parallel::Bool
 end
 
@@ -331,7 +313,7 @@ Base.size(H::Hes) = (H.objL^2, H.objL^2)
 function LinearMaps._unsafe_mul!(vectorout::AbstractVecOrMat, H::Hes, vectorin::AbstractVector)
 
     function  term3_rhs_iF(iF)
-        out = dB_dT.(H.Test_flat, H.freqs[iF], H.wavcen) .* vectorin
+        out = dB_dT.(H.Test_flat, H.freqs[iF], H.wavcen, H.blackbody_scaling) .* vectorin
         G( reshape(out, H.objL, H.objL), H.fftPSFs[iF], H.weights[iF], H.freqs[1], H.freqs[end], H.plan_PSF)
     end
     
@@ -344,7 +326,7 @@ function LinearMaps._unsafe_mul!(vectorout::AbstractVecOrMat, H::Hes, vectorin::
     
     function term3_iF(iF)
         out = Gtranspose( reshape(term3_rhs, H.imgL, H.imgL), H.fftPSFs[iF], H.weights[iF], H.freqs[1], H.freqs[end], H.plan_PSF )
-         (Diagonal([dB_dT(i, H.freqs[iF], H.wavcen) for i in H.Test_flat]) * out )
+         (Diagonal([dB_dT(i, H.freqs[iF], H.wavcen, H.blackbody_scaling) for i in H.Test_flat]) * out )
     end
     
     if H.parallel == true
@@ -366,7 +348,7 @@ function build_hessian(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfar, pl
         term3rhs_temp = zeros(typeof(freqs[1]), imgp.imgL^2, imgp.objL^2)
         for i = 1:imgp.objL^2
             input = zeros(typeof(freqs[1]), imgp.objL^2)
-            input[i] = dB_dT(Test_flat[i], freqs[iF], pp.wavcen)
+            input[i] = dB_dT(Test_flat[i], freqs[iF], pp.wavcen, pp.blackbody_scaling)
             # can this be done faster?
             out = G( reshape(input, imgp.objL, imgp.objL), fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF)
             term3rhs_temp[:, i] .= term3rhs_temp[:, i] .+ out
@@ -390,7 +372,7 @@ function jacobian_vp_undiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
     nF = pp.orderfreq + 1
     #fftPSFs = [get_fftPSF(freqs[iF], surrogates[iF], weights[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel) for iF in 1:pp.orderfreq+1]
     function get_fftPSF_iF(iF)
-        get_fftPSF(freqs[iF], surrogates[iF], weights[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel)
+        get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel)
     end
     fftPSFs = ThreadsX.map(get_fftPSF_iF, Array(1:nF))
 
@@ -406,7 +388,7 @@ function jacobian_vp_undiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
     image_diff_grid =  make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel) - reshape(image_Test_flat, imgp.imgL, imgp.imgL)
 
     function term2_iF(iF)
-        -2 * lambda' * Diagonal(  dB_dT.(Test_flat, freqs[iF], pp.wavcen) ) * Gtranspose( image_diff_grid,  fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF)
+        -2 * lambda' * Diagonal(  dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) ) * Gtranspose( image_diff_grid,  fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF)
     end
     
     if parallel == true
@@ -428,24 +410,26 @@ function uvector_dot_Gtransposedg_vvector(pp, imgp, freq, surrogate, incident, n
     geoms_flat = geoms[:]
         
     far = geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar, parallel)
-    PSF_nomean = far_to_PSFsnomean(far, psfL, imgp.binL)[:]
+    #PSF_nomean = far_to_PSFsnomean(far, psfL, imgp.binL)[:]
         
     temp1 = plan_PSF * [reshape(uflat, imgp.objL, imgp.objL) zeros(typeof(freq),  imgp.objL, imgp.imgL); zeros(typeof(freq), imgp.imgL, imgp.objL + imgp.imgL) ]
     temp2 = plan_PSF \ [zeros(typeof(freq), imgp.objL, imgp.objL + imgp.imgL); zeros(typeof(freq), imgp.imgL, imgp.objL) vgrid]
     
     xvector = real.( plan_PSF * (temp1 .* temp2) .* weight .* (freqend - freq1) )[:]
-    dmean = (xvector * (psfL^2) / (sum(PSF_nomean)) ) .- ( (psfL^2) * (xvector' * PSF_nomean) / ( sum(PSF_nomean) )^2 )
-    dmeantemp = repeat(reshape(dmean, psfL, psfL), inner=(imgp.binL,imgp.binL))
-    dim = (pp.gridL - psfL * imgp.binL) ÷ 2 
-    dfarcrop = [zeros(typeof(freq), dim, pp.gridL); zeros(typeof(freq), psfL, dim) dmeantemp zeros(typeof(freq), psfL, dim); zeros(typeof(freq), dim, pp.gridL) ][:]
+    #dmean = (xvector * (psfL^2) / (sum(PSF_nomean)) ) .- ( (psfL^2) * (xvector' * PSF_nomean) / ( sum(PSF_nomean) )^2 )
     
-    objective_out = conj.(far)[:]
+    dmeantemp = repeat(reshape(xvector, psfL, psfL), inner=(imgp.binL,imgp.binL))
+            
+    dim = (pp.gridL - (psfL * imgp.binL) ) ÷ 2 
+    dfarcrop = [zeros(typeof(freq), dim, pp.gridL); zeros(typeof(freq), (psfL * imgp.binL) , dim) dmeantemp zeros(typeof(freq), (psfL * imgp.binL) , dim); zeros(typeof(freq), dim, pp.gridL) ][:]
+    
+    objective_out = pp.PSF_scaling .* conj.(far)[:] ./ freq
     zeropadded = plan_nearfar \ [zeros(typeof(freq), pp.gridL, 2*pp.gridL); zeros(typeof(freq), pp.gridL, pp.gridL) reshape(dfarcrop .* objective_out,pp.gridL, pp.gridL) ]
      
     dsur_dg_function(geom) =  chebgradient(surrogate, geom)[2]
     dsur_dg = ThreadsX.map(dsur_dg_function, geoms)
             
-    2*real( dsur_dg .* incident .* (plan_nearfar * (zeropadded .* n2f_kernel))[1:pp.gridL, 1:pp.gridL] );
+     2*real( dsur_dg .* incident .* (plan_nearfar * (zeropadded .* n2f_kernel))[1:pp.gridL, 1:pp.gridL] );
 
 end
         
@@ -473,7 +457,7 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
         surrogate = surrogates[iF]
         incident = prepare_incident(pp,freq)  
         n2f_kernel = prepare_n2f_kernel(pp,freq, plan_nearfar);
-        uvector = (-2 * lambda .* dB_dT.(Test_flat, freqs[iF], pp.wavcen) ) 
+        uvector = (-2 * lambda .* dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) ) 
         uvector_dot_Gtransposedg_vvector(pp, imgp, freq, surrogate, incident, n2f_kernel, geoms, weight, freqend, freq1, uvector, image_diff_grid, plan_nearfar, plan_PSF, parallel)[:]
     end
             
@@ -485,9 +469,9 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
     
         
     if parallel == true
-        vgrid2  = ThreadsX.sum(iF->G( reshape(dB_dT.(Test_flat, freqs[iF], pp.wavcen) .* lambda , imgp.objL, imgp.objL)  , fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
+        vgrid2  = ThreadsX.sum(iF->G( reshape(dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) .* lambda , imgp.objL, imgp.objL)  , fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
     else
-        vgrid2  = sum(iF->G(reshape(dB_dT.(Test_flat, freqs[iF], pp.wavcen) .* lambda , imgp.objL, imgp.objL), fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
+        vgrid2  = sum(iF->G(reshape(dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) .* lambda , imgp.objL, imgp.objL), fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
     end
     vgrid2 = reshape(vgrid2, imgp.imgL, imgp.imgL)
         

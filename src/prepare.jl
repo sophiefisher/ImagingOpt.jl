@@ -21,8 +21,11 @@ struct PhysicsParams{FloatType <: AbstractFloat, IntType <: Signed}
     in_air::String #is the incident medium air or the substrate (True or False)
     models_dir::String #folder pointing to surrogate data
     
+    blackbody_scaling::FloatType #scaling of the black body spectrum
+    PSF_scaling::FloatType #scaling of the PSFs
     
-    function PhysicsParams{FloatType, IntType}(lbλ_μm, ubλ_μm, orderλ, F_μm, depth_μm, gridL, cellL_μm, lbwidth_μm, ubwidth_μm, orderwidth, thicknessg_μm, materialg, thickness_sub_μm, materialsub, in_air, models_dir) where {FloatType <: AbstractFloat} where {IntType <: Signed} 
+    
+    function PhysicsParams{FloatType, IntType}(lbλ_μm, ubλ_μm, orderλ, F_μm, depth_μm, gridL, cellL_μm, lbwidth_μm, ubwidth_μm, orderwidth, thicknessg_μm, materialg, thickness_sub_μm, materialsub, in_air, models_dir, blackbody_scaling, PSF_scaling) where {FloatType <: AbstractFloat} where {IntType <: Signed} 
         wavcen = round(1/mean([1/lbλ_μm, 1/ubλ_μm]),digits=2)
 
         lbfreq = wavcen/ubλ_μm
@@ -37,7 +40,7 @@ struct PhysicsParams{FloatType <: AbstractFloat, IntType <: Signed}
         thicknessg = thicknessg_μm/wavcen
         thickness_sub = thickness_sub_μm/wavcen
         
-        new(lbfreq, ubfreq, orderλ, wavcen, F, depth, gridL, cellL, lbwidth, ubwidth, orderwidth, thicknessg, materialg, thickness_sub, materialsub, in_air, models_dir)
+        new(lbfreq, ubfreq, orderλ, wavcen, F, depth, gridL, cellL, lbwidth, ubwidth, orderwidth, thicknessg, materialg, thickness_sub, materialsub, in_air, models_dir, blackbody_scaling, PSF_scaling)
     end
     
 end
@@ -64,6 +67,7 @@ struct OptimizeParams{FloatType <: AbstractFloat, IntType <: Signed}
     αinit::FloatType
     maxeval::IntType
     xtol_rel::FloatType
+    save_objective_vals::Bool
 end
 
 struct ReconstructionParams{FloatType <: AbstractFloat}
@@ -71,6 +75,7 @@ struct ReconstructionParams{FloatType <: AbstractFloat}
     T_init_uniform_val::FloatType
     xtol_rel::FloatType
     geoms_init_savefilestring::String
+    subtract_reg::FloatType
 end
 
 struct JobParams
@@ -176,7 +181,7 @@ function prepare_blackbody(Tmap::Matrix,  freqs::Vector, imgp::ImagingParams, pp
     kb = convert(typeof(freqs[1]),1.380649e-23)
     
     Binit = [(2 * freq ^3 ) ./ (exp.(h * (freq * c * 10^6 / pp.wavcen) ./ (kb * Tmap) ) .- 1) for freq in freqs]
-    B = arrarr_to_multi(Binit)
+    B = pp.blackbody_scaling .* arrarr_to_multi(Binit)
 end
 
 function prepare_blackbody(Tmaps::Vector, freqs::Vector, imgp::ImagingParams, pp::PhysicsParams)

@@ -6,7 +6,7 @@
         
         "F_μm": 20000,
         "depth_μm":200000,
-        "gridL": 500,
+        "gridL": 1000,
         
         "cellL_μm":4,
         "lbwidth_μm":1.8,
@@ -19,14 +19,17 @@
         "materialsub":"Si",
         
         "in_air":"False",
-        "models_dir": "ImagingOpt.jl/surdata" 
+        "models_dir": "ImagingOpt.jl/surdata", 
+        
+        "blackbody_scaling": 1,
+        "PSF_scaling":1e13
     },
  
     "imgp": {
         "objL": 8,
-        "imgL": 128,
+        "imgL": 256,
         "binL": 1,
-        "objN": 2,
+        "objN": 3,
         "object_type": "random",
         "lbT":280,
         "ubT":310,
@@ -39,15 +42,17 @@
     "optp": {
         "geoms_init_type":"uniform",
         "geoms_init_loadfilename":"minimax_geoms_LD_MMA_2_inair=False_1.00e-06_500.csv",
-        "αinit":1e-7,
-        "maxeval":100,
-        "xtol_rel":1e-5
+        "αinit":1e-6,
+        "maxeval":2,
+        "xtol_rel":1e-5,
+        "save_objective_vals":true
         
     },
     "recp": {
         "T_init_type":"uniform",
         "T_init_uniform_val":295,
         "xtol_rel":1e-4,
-        "geoms_init_savefilestring":"minimax_1.00e-06_500"
+        "geoms_init_savefilestring":"minimax_1.00e-06_500",
+        "subtract_reg":0
     }
 }

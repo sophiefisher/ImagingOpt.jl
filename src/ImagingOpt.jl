@@ -3,9 +3,10 @@ module ImagingOpt
     export PhysicsParams, RecoveryParams, ImagingParams, OptimizeParams, JobParams
     export prepare_incident, prepare_n2f_kernel, prepare_objects, prepare_geoms, prepare_blackbody, permittivity, prepare_surrogate, prepare_reconstruction
     export G, Gtranspose
-    export nearfield, geoms_to_far, far_to_PSFs, PSFs_to_fftPSFs, get_fftPSF, get_PSF, make_images, reconstruct_object, reconstruction_objective, reconstruction_objective_simplified, gradient_reconstruction_T,  get_image_diff_flat, dB_dT, d2B_dT2
-    export get_params, Hes, term1plusterm2_hes, build_hessian, jacobian_vp_undiff, jacobian_vp_autodiff, jacobian_vp_manual
+    export nearfield, geoms_to_far, far_to_PSFs, PSFs_to_fftPSFs, get_fftPSF, get_PSF, make_images, reconstruct_object, reconstruction_objective, reconstruction_objective_simplified, gradient_reconstruction_T, gradient_reconstruction_T_autodiff,  get_image_diff_flat, dB_dT, d2B_dT2
+    export Hes, term1plusterm2_hes, build_hessian, jacobian_vp_undiff, jacobian_vp_autodiff, jacobian_vp_manual
     export arrarr_to_multi
+    export get_params, get_α, run_opt
 
     using FFTW
     using UUIDs
@@ -48,6 +49,9 @@ module ImagingOpt
     using ThreadsX
     using ChainRules
     using ChainRules: RuleConfig, HasReverseMode, rrule_via_ad, ProjectTo, NoTangent, unthunk
+    using IterativeSolvers
+    using PyPlot
+    using Dates
 
     include("prepare.jl")
     include("utils.jl")

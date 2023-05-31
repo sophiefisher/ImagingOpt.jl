@@ -32,6 +32,7 @@ StructTypes.StructType(::Type{JobParams}) = StructTypes.Struct()
 
 const PARAMS_DIR = "ImagingOpt.jl/params"
 
+
 function get_params(pname, presicion)
     
     if presicion == "double"
@@ -57,6 +58,14 @@ function get_params(pname, presicion)
     params = JobParams(pp, imgp, optp, recp)
 end
 
+function get_α(image_Tmap_flat, pp, imgp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    Trand_flat = rand(imgp.lbT:eps(typeof(pp.lbfreq)):imgp.ubT,imgp.objL^2)
+    image_diff_flat = get_image_diff_flat(Trand_flat, image_Tmap_flat, pp, imgp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    (image_diff_flat'*image_diff_flat)/( (Trand_flat .- recp.subtract_reg )'*(Trand_flat .- recp.subtract_reg) )
+end
+
+#=
+#need to update
 function design_minimax_lens(pname, presicion="double", parallel=true, opt_name=:LD_MMA, num_iters=1000, opt_xtol_rel=1e-6, inequal_tol=1e-8, save_objective_data=true)
     #assumptions: starting from a uniform metasurface
     #not sure if single presicion works
@@ -134,18 +143,33 @@ function design_minimax_lens(pname, presicion="double", parallel=true, opt_name=
     writedlm( geoms_filename,  maxx[1:end-1],',')
     println(ret)
 end
-
+=#
 
 #function design_singlefreq_lens()
 #end
 
-
+#optimize metasurface parameters for fixed alpha; no noise
 function run_opt(pname, presicion, parallel)
     params = get_params(pname, presicion)
     pp = params.pp
     imgp = params.imgp
     optp = params.optp
     recp = params.recp
+    
+    opt_id = @sprintf("%s_geoms_%s_αinit_%.1e_maxeval_%d_xtolrel_%.1e", Dates.now(), optp.geoms_init_type, optp.αinit, optp.maxeval, optp.xtol_rel)
+    directory = @sprintf("ImagingOpt.jl/optdata/%s", opt_id)
+    Base.Filesystem.mkdir( directory )
+    
+    #save parameters in json file
+    jsonread = JSON3.read(read("$PARAMS_DIR/$pname.json", String))
+    open("$directory/$opt_id.json", "w") do io
+        JSON3.pretty(io, jsonread)
+    end
+    
+    if optp.save_objective_vals == true
+        file_save_objective_vals = "$directory/objective_vals_$opt_id.csv"
+    end    
+    
     surrogates, freqs = prepare_surrogate(pp)
     Tinit_flat = prepare_reconstruction(recp, imgp)
     Tmaps = prepare_objects(imgp, pp)
@@ -156,57 +180,118 @@ function run_opt(pname, presicion, parallel)
     
     function myfunc(parameters::Vector, grad::Vector)
         start = time()
-        #parameters has geoms first, then reconstruction parameter alpha
-        geoms = reshape(parameters[1:end-1], pp.gridL, pp.gridL)
-        α = parameters[end]
+        #parameters = geoms
+        geoms = reshape(parameters, pp.gridL, pp.gridL)
+        
+        #=
+        f = figure(figsize=(4,4))
+        imshow(geoms, vmin=pp.lbwidth, vmax = pp.ubwidth)
+        colorbar()
+        display(f)
+        =#
+        
+        if parallel == true
+            fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+        else
+            fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+        end
+
         
         objective = convert(typeof(freqs[1]), 0)
-        grad[:] = zeros(typeof(freqs[1]), pp.gridL^2 + 1)
+        grad[:] = zeros(typeof(freqs[1]), pp.gridL^2)
         
         for obji = 1:imgp.objN
             Tmap = Tmaps[obji]
             B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
             
-            #shouldn't this be outside the loop?
-            fftPSFs = [get_fftPSF(freqs[iF], surrogates[iF], weights[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel) for iF in 1:pp.orderfreq+1]
             image_Tmap_grid = make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel);
-            Test_flat = reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, parallel)
+            Test_flat = reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, optp.αinit, false, parallel)
+            
+            #=
+            f = figure(figsize=(6,3))
+            subplot(1,2,1)
+            imshow(Tmap)
+            colorbar()
+            subplot(1,2,2)
+            imshow(reshape(Test_flat,imgp.objL, imgp.objL))
+            colorbar()
+            display(f)
+            =#
             
             objective = objective +  (1/imgp.objN) * ( (Tmap[:] - Test_flat)'*(Tmap[:] - Test_flat) ) / (Tmap[:]' * Tmap[:])
 
-            term1plusterm2_hessian = term1plusterm2_hes(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, parallel);
-            H = Hes(pp.orderfreq + 1, pp.wavcen, imgp.objL, imgp.imgL, term1plusterm2_hessian, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, parallel)
+            term1plusterm2_hessian = term1plusterm2_hes(optp.αinit, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, parallel);
+            H = Hes(pp.orderfreq + 1, pp.wavcen, imgp.objL, imgp.imgL, term1plusterm2_hessian, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, pp.blackbody_scaling, parallel)
             b = 2 * (Tmap[:] - Test_flat) / (Tmap[:]' * Tmap[:])
 
             lambda = zeros(typeof(freqs[1]), imgp.objL^2)
             cg!(lambda, H, b);
             if length(grad) > 0
-                grad[1:end-1] = grad[1:end-1] + ( (1/imgp.objN) * jacobian_vp(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, Tmap, parallel)[:] )
-                grad[end] = grad[end] + ( (1/imgp.objN) * 2 * lambda' * Test_flat )
+                grad[1:end] = grad[1:end] + ( (1/imgp.objN) * jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, B_Tmap_grid, fftPSFs, parallel)[:] )
+                
             end
         end
         elapsed = time() - start
+    
+        if optp.save_objective_vals == true
+            open(file_save_objective_vals, "a") do io
+                writedlm(io, objective, ',')
+            end
+        end
+    
         println()
         println(@sprintf("time elapsed = %f",elapsed))
-        println(@sprintf("OBJECTIVE VAL IS %f",objective) )
+        println(@sprintf("OBJECTIVE VAL IS %.12f",objective) )
         println()
         flush(stdout)
         objective
     end
     
-    opt = Opt(:LD_LBFGS, pp.gridL^2 + 1)
+    opt = Opt(:LD_MMA, pp.gridL^2)
     opt.min_objective = myfunc
     
-    opt.lower_bounds = [repeat([ pp.lbwidth,], pp.gridL^2); eps()]
-    opt.upper_bounds = [repeat([ pp.ubwidth,], pp.gridL^2); Inf]
+    opt.lower_bounds = pp.lbwidth
+    opt.upper_bounds = pp.ubwidth
     
     opt.xtol_rel = optp.xtol_rel
     opt.maxeval = optp.maxeval
     
-    geoms_init = prepare_geoms(params)[:]
-    parameters_init = [geoms_init; optp.αinit]
+    parameters_init = prepare_geoms(params)[:]
     
+    #myfunc(parameters_init, similar(parameters_init))
     (minobj,minparams,ret) = optimize(opt, parameters_init)
+    
+    #save optimized metasurface parameters (geoms)
+    geoms_filename = "$directory/geoms_$opt_id.csv"
+    writedlm( geoms_filename,  minparams,',')
+
+
+    geoms = reshape(minparams, pp.gridL, pp.gridL)
+    if parallel == true
+        fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    else
+        fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    end
+    
+    figure()
+    for obji = 1:imgp.objN
+        Tmap = Tmaps[obji]
+        B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+
+        image_Tmap_grid = make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel);
+        Test = reshape(reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, optp.αinit, false, parallel), imgp.objL, imgp.objL)
+        subplot(imgp.objN, 2, obji*2 - 1)
+        imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
+        colorbar()
+        title("Tmap $obji")
+    
+        subplot(imgp.objN, 2, obji*2 )
+        imshow(Test, vmin = imgp.lbT, vmax = imgp.ubT)
+        colorbar()
+        title("Test $obji")
+    end
+    tight_layout()
+    savefig("$directory/reconstruction_$opt_id.png")
 end
 
 
