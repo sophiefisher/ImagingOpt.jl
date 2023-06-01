@@ -156,7 +156,7 @@ function run_opt(pname, presicion, parallel)
     optp = params.optp
     recp = params.recp
     
-    opt_id = @sprintf("%s_geoms_%s_αinit_%.1e_maxeval_%d_xtolrel_%.1e", Dates.now(), optp.geoms_init_type, optp.αinit, optp.maxeval, optp.xtol_rel)
+    opt_id = @sprintf("%s_geoms_%s_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", Dates.now(), optp.geoms_init_type, optp.αinit, optp.maxeval, optp.xtol_rel)
     directory = @sprintf("ImagingOpt.jl/optdata/%s", opt_id)
     Base.Filesystem.mkdir( directory )
     
