@@ -89,7 +89,8 @@ function far_to_PSF(far, psfL, binL, scaling, freq)
     farcropbin = reshape(farcrop, (binL, psfL, binL, psfL))
     farcropbinmag = (abs.(farcropbin)).^2
     PSFbin = sum(farcropbinmag, dims=(1, 3))
-    PSF = scaling .* dropdims(PSFbin, dims=(1,3)) ./ freq
+    #multiply PSFs by arbitrary scaling factor and divide by freqency to get photon count
+    PSF = scaling .* dropdims(PSFbin, dims=(1,3)) ./ freq 
 end
     
 

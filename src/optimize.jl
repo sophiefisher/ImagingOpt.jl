@@ -77,7 +77,7 @@ function compute_system_params(pp, imgp)
     difflimmiddle = midlambda / (2*NA)
     difflimupper = (ublambda) / (2*NA)
     difflimlower = (lblambda ) / (2*NA)
-    println("the diffraction limit for λ = $midlambda μm is $difflimmiddle μm ($difflimlower μm to $difflimupper)")
+    println("the diffraction limit for λ = $midlambda μm is $difflimmiddle μm ($difflimlower μm to $difflimupper for full bandwidth)")
 end
 
 #=
