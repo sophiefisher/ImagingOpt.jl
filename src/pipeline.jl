@@ -243,10 +243,11 @@ function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, r
     
     opt = Opt(:LD_LBFGS, imgp.objL^2)
     opt.lower_bounds = repeat([ convert(typeof(pp.lbfreq),3.0),], imgp.objL^2)
-    opt.xtol_rel = recp.xtol_rel
+    #opt.xtol_rel = recp.xtol_rel
+    opt.ftol_rel = recp.ftol_rel
     opt.min_objective = myfunc
     
-    println(@sprintf("x tolerance is %e", recp.xtol_rel))
+    println(@sprintf("f tolerance is %e", recp.ftol_rel))
     println(@sprintf("α is %e", α))
     flush(stdout) 
         
@@ -254,7 +255,7 @@ function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, r
     minT = convert.(typeof(freqs[1]),minT)
     
     if save==true
-        Tmaps_filename = @sprintf("ImagingOpt.jl/recdata/Tmap_%s_%s_%d_%d_%.2e_%.2f_%s_%.2e_%.2f.csv", imgp.object_savefilestring, optp.geoms_init_savefilestring,  imgp.objL, imgp.imgL, α, imgp.noise_level, string(imgp.noise_abs), recp.xtol_rel, imgp.emiss_noise_level);
+        Tmaps_filename = @sprintf("ImagingOpt.jl/recdata/Tmap_%s_%s_%d_%d_%.2e_%.2f_%s_%.2e_%.2f.csv", imgp.object_savefilestring, optp.geoms_init_savefilestring,  imgp.objL, imgp.imgL, α, imgp.noise_level, string(imgp.noise_abs), recp.ftol_rel, imgp.emiss_noise_level);
         writedlm( Tmaps_filename,  hcat( minT, Tmap[:]),',')
     end
     #println(@sprintf("minf is %.2f", minf))

@@ -64,6 +64,22 @@ function get_α(image_Tmap_flat, pp, imgp, recp, fftPSFs, freqs, weights, plan_n
     (image_diff_flat'*image_diff_flat)/( (Trand_flat .- recp.subtract_reg )'*(Trand_flat .- recp.subtract_reg) )
 end
 
+function compute_system_params(pp, imgp)
+    image_pixel_size = imgp.binL * pp.wavcen * pp.cellL
+    println("image pixel size is $image_pixel_size μm")
+    object_pixel_size = image_pixel_size * pp.depth / pp.F
+    println("object pixel size is $object_pixel_size μm")
+    NA = sin(atan( pp.gridL * pp.cellL / (2 * pp.F) ))
+    println("the NA is $NA")
+    lblambda = pp.wavcen / pp.ubfreq 
+    ublambda = pp.wavcen / pp.lbfreq 
+    midlambda = (ublambda + lblambda)/2
+    difflimmiddle = midlambda / (2*NA)
+    difflimupper = (ublambda) / (2*NA)
+    difflimlower = (lblambda ) / (2*NA)
+    println("the diffraction limit for λ = $midlambda μm is $difflimmiddle μm ($difflimlower μm to $difflimupper)")
+end
+
 #=
 #need to update
 function design_minimax_lens(pname, presicion="double", parallel=true, opt_name=:LD_MMA, num_iters=1000, opt_xtol_rel=1e-6, inequal_tol=1e-8, save_objective_data=true)
@@ -225,7 +241,9 @@ function run_opt(pname, presicion, parallel)
             b = 2 * (Tmap[:] - Test_flat) / (Tmap[:]' * Tmap[:])
 
             lambda = zeros(typeof(freqs[1]), imgp.objL^2)
-            cg!(lambda, H, b);
+            lambda, ch = cg!(lambda, H, b);
+            println(ch)
+            flush(stdout)
             if length(grad) > 0
                 grad[1:end] = grad[1:end] + ( (1/imgp.objN) * jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, B_Tmap_grid, fftPSFs, parallel)[:] )
                 
@@ -260,6 +278,14 @@ function run_opt(pname, presicion, parallel)
     
     #myfunc(parameters_init, similar(parameters_init))
     (minobj,minparams,ret) = optimize(opt, parameters_init)
+    println("RETURN VALUE IS $ret")
+    
+    #save output data in json file
+    dict_output = Dict("return_val" => ret)
+    output_data_filename = "$directory/output_data_$opt_id.json"
+    open(output_data_filename,"w") do io
+        JSON3.pretty(io, dict_output)
+    end
     
     #save optimized metasurface parameters (geoms)
     geoms_filename = "$directory/geoms_$opt_id.csv"

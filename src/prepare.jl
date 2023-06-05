@@ -73,7 +73,7 @@ end
 struct ReconstructionParams{FloatType <: AbstractFloat}
     T_init_type::String
     T_init_uniform_val::FloatType
-    xtol_rel::FloatType
+    ftol_rel::FloatType
     geoms_init_savefilestring::String
     subtract_reg::FloatType
 end
