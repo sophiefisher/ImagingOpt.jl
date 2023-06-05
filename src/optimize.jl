@@ -172,7 +172,8 @@ function run_opt(pname, presicion, parallel)
     optp = params.optp
     recp = params.recp
     
-    opt_id = @sprintf("%s_geoms_%s_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", Dates.now(), optp.geoms_init_type, optp.αinit, optp.maxeval, optp.xtol_rel)
+    opt_date = Dates.now()
+    opt_id = @sprintf("%s_geoms_%s_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", opt_date, optp.geoms_init_type, optp.αinit, optp.maxeval, optp.xtol_rel)
     directory = @sprintf("ImagingOpt.jl/optdata/%s", opt_id)
     Base.Filesystem.mkdir( directory )
     
@@ -183,7 +184,7 @@ function run_opt(pname, presicion, parallel)
     end
     
     if optp.save_objective_vals == true
-        file_save_objective_vals = "$directory/objective_vals_$opt_id.csv"
+        file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"
     end    
     
     surrogates, freqs = prepare_surrogate(pp)
@@ -194,6 +195,42 @@ function run_opt(pname, presicion, parallel)
     plan_PSF = plan_fft!(zeros(Complex{typeof(freqs[1])}, (imgp.objL + imgp.imgL, imgp.objL + imgp.imgL)), flags=FFTW.MEASURE)
     weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)
     
+    geoms_init = prepare_geoms(params)
+    parameters_init = geoms_init[:]
+
+    #save initial reconstruction
+    if parallel == true
+        fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    else
+        fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    end
+    
+    figure()
+    suptitle("initial reconstruction")
+    for obji = 1:imgp.objN
+        Tmap = Tmaps[obji]
+        B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+
+        image_Tmap_grid = make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel);
+        Test = reshape(reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, optp.αinit, false, parallel), imgp.objL, imgp.objL)
+        subplot(imgp.objN, 3, obji*3 - 2)
+        imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
+        colorbar()
+        title(L"T(x,y) \ %$obji")
+    
+        subplot(imgp.objN, 3, obji*3 - 1)
+        imshow(Test, vmin = imgp.lbT, vmax = imgp.ubT)
+        colorbar()
+        title(L"T_{est}(x,y) \ %$obji")
+    
+        subplot(imgp.objN, 3, obji*3 )
+        imshow( (Test .- Tmap)./Tmap .* 100)
+        colorbar()
+        title("% difference $obji")
+    end
+    tight_layout()
+    savefig("$directory/reconstruction_initial_$opt_date.png")
+
     function myfunc(parameters::Vector, grad::Vector)
         start = time()
         #parameters = geoms
@@ -274,7 +311,7 @@ function run_opt(pname, presicion, parallel)
     opt.xtol_rel = optp.xtol_rel
     opt.maxeval = optp.maxeval
     
-    parameters_init = prepare_geoms(params)[:]
+
     
     #myfunc(parameters_init, similar(parameters_init))
     (minobj,minparams,ret) = optimize(opt, parameters_init)
@@ -282,17 +319,30 @@ function run_opt(pname, presicion, parallel)
     
     #save output data in json file
     dict_output = Dict("return_val" => ret)
-    output_data_filename = "$directory/output_data_$opt_id.json"
+    output_data_filename = "$directory/output_data_$opt_date.json"
     open(output_data_filename,"w") do io
         JSON3.pretty(io, dict_output)
     end
     
     #save optimized metasurface parameters (geoms)
-    geoms_filename = "$directory/geoms_$opt_id.csv"
+    geoms_filename = "$directory/geoms_$opt_date.csv"
     writedlm( geoms_filename,  minparams,',')
 
-
+    #save optimized metasurface parameters in an image (geoms)
     geoms = reshape(minparams, pp.gridL, pp.gridL)
+    figure()
+    subplot(1,2,1)
+    imshow( geoms_init , vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("initial metasurface \n parameters")
+    subplot(1,2,2)
+    imshow(geoms, vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    savefig("$directory/geoms_$opt_date.png")
+
+
+    #save optimized reconstruction
     if parallel == true
         fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
     else
@@ -300,24 +350,45 @@ function run_opt(pname, presicion, parallel)
     end
     
     figure()
+    suptitle("optimized reconstruction")
     for obji = 1:imgp.objN
         Tmap = Tmaps[obji]
         B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
 
         image_Tmap_grid = make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel);
         Test = reshape(reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, optp.αinit, false, parallel), imgp.objL, imgp.objL)
-        subplot(imgp.objN, 2, obji*2 - 1)
+        subplot(imgp.objN, 3, obji*3 - 2)
         imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
         colorbar()
-        title("Tmap $obji")
+        title(L"T(x,y) \ %$obji")
     
-        subplot(imgp.objN, 2, obji*2 )
+        subplot(imgp.objN, 3, obji*3 - 1)
         imshow(Test, vmin = imgp.lbT, vmax = imgp.ubT)
         colorbar()
-        title("Test $obji")
+        title(L"T_{est}(x,y) \ %$obji")
+    
+        subplot(imgp.objN, 3, obji*3 )
+        imshow( (Test .- Tmap)./Tmap .* 100 )
+        colorbar()
+        title("% difference $obji")
     end
     tight_layout()
-    savefig("$directory/reconstruction_$opt_id.png")
+    savefig("$directory/reconstruction_optimized_$opt_date.png")
+
+    #plot objective values
+    if optp.save_objective_vals == true
+        objdata = readdlm(file_save_objective_vals,',')
+        figure(figsize=(10,4))
+        suptitle(L"\mathrm{objective \  data } ,  \langle \frac{|| T - T_{est} ||^2}{  || T ||^2} \rangle_{T}")
+        subplot(1,2,1)
+        plot(objdata,".-")
+    
+        subplot(1,2,2)
+        semilogy(objdata,".-")
+        tight_layout()
+        savefig("$directory/objective_vals_$opt_date.png")
+    end
+
 end
 
 

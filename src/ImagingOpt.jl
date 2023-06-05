@@ -52,6 +52,7 @@ module ImagingOpt
     using IterativeSolvers
     using PyPlot
     using Dates
+    using LaTeXStrings
 
     include("prepare.jl")
     include("utils.jl")
