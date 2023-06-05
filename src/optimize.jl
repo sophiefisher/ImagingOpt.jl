@@ -78,6 +78,7 @@ function compute_system_params(pp, imgp)
     difflimupper = (ublambda) / (2*NA)
     difflimlower = (lblambda ) / (2*NA)
     println("the diffraction limit for λ = $midlambda μm is $difflimmiddle μm ($difflimlower μm to $difflimupper for full bandwidth)")
+    Dict("object_pixel_size_μm" => object_pixel_size, "image_pixel_size_μm" => image_pixel_size, "NA" => NA, "diff_lim_middle_μm" => difflimmiddle, "diff_lim_lower_μm" => difflimlower, "diff_lim_upper_μm" => difflimupper)
 end
 
 #=
@@ -177,11 +178,19 @@ function run_opt(pname, presicion, parallel)
     directory = @sprintf("ImagingOpt.jl/optdata/%s", opt_id)
     Base.Filesystem.mkdir( directory )
     
-    #save parameters in json file
+    #save input parameters in json file
     jsonread = JSON3.read(read("$PARAMS_DIR/$pname.json", String))
     open("$directory/$opt_id.json", "w") do io
         JSON3.pretty(io, jsonread)
     end
+
+    #save additional system parameters in json file
+    extra_params = compute_system_params(pp, imgp)
+    extra_params_filename = "$directory/extra_params_$opt_date.json"
+    open(extra_params_filename,"w") do io
+        JSON3.pretty(io, extra_params)
+    end
+    
     
     if optp.save_objective_vals == true
         file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"
@@ -301,6 +310,7 @@ function run_opt(pname, presicion, parallel)
         flush(stdout)
         objective
     end
+    
     
     opt = Opt(:LD_MMA, pp.gridL^2)
     opt.min_objective = myfunc
