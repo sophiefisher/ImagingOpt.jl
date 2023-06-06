@@ -4,7 +4,7 @@
         "ubλ_μm":12,
         "orderλ":20,
         
-        "F_μm": 2500,
+        "F_μm": 2000,
         "depth_μm":200000,
         "gridL": 500,
         
@@ -45,7 +45,8 @@
         "αinit":1e-5,
         "maxeval":2,
         "xtol_rel":1e-5,
-        "save_objective_vals":true
+        "save_objective_vals":true,
+        "cg_maxiter_factor":4
         
     },
     "recp": {

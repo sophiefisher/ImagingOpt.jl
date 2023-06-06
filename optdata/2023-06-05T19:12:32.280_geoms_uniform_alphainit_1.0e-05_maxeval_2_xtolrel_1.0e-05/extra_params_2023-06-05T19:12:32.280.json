@@ -1,8 +1,0 @@
-{
-    "image_pixel_size_μm": 4,
-    "diff_lim_lower_μm": 10.77032961426901,
-    "NA": 0.37139067635410367,
-    "object_pixel_size_μm": 320,
-    "diff_lim_middle_μm": 13.462912017836262,
-    "diff_lim_upper_μm": 16.155494421403514
-}

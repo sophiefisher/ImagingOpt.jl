@@ -68,6 +68,7 @@ struct OptimizeParams{FloatType <: AbstractFloat, IntType <: Signed}
     maxeval::IntType
     xtol_rel::FloatType
     save_objective_vals::Bool
+    cg_maxiter_factor::IntType
 end
 
 struct ReconstructionParams{FloatType <: AbstractFloat}

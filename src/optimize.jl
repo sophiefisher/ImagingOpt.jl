@@ -191,10 +191,16 @@ function run_opt(pname, presicion, parallel)
         JSON3.pretty(io, extra_params)
     end
     
-    
+    #file for saving objective vals
     if optp.save_objective_vals == true
         file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"
     end    
+
+    #file for saving conjugate gradient solve iterations
+    file_save_cg_iters = "$directory/cg_iters_$opt_date.txt"
+    open(file_save_cg_iters, "a") do io
+        write(io, "Default maxiter = $(imgp.objL^2); set to maxiter = $(optp.cg_maxiter_factor * imgp.objL^2) \n")
+    end
     
     surrogates, freqs = prepare_surrogate(pp)
     Tinit_flat = prepare_reconstruction(recp, imgp)
@@ -214,7 +220,7 @@ function run_opt(pname, presicion, parallel)
         fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
     end
     
-    figure()
+    figure(figsize=(12,10))
     suptitle("initial reconstruction")
     for obji = 1:imgp.objN
         Tmap = Tmaps[obji]
@@ -287,9 +293,13 @@ function run_opt(pname, presicion, parallel)
             b = 2 * (Tmap[:] - Test_flat) / (Tmap[:]' * Tmap[:])
 
             lambda = zeros(typeof(freqs[1]), imgp.objL^2)
-            lambda, ch = cg!(lambda, H, b);
+            lambda, ch = cg!(lambda, H, b, log=true, maxiter = optp.cg_maxiter_factor * imgp.objL^2);
             println(ch)
             flush(stdout)
+            open(file_save_cg_iters, "a") do io
+                writedlm(io, length(ch[:resnorm]), ',')
+            end
+        
             if length(grad) > 0
                 grad[1:end] = grad[1:end] + ( (1/imgp.objN) * jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, B_Tmap_grid, fftPSFs, parallel)[:] )
                 
@@ -340,7 +350,7 @@ function run_opt(pname, presicion, parallel)
 
     #save optimized metasurface parameters in an image (geoms)
     geoms = reshape(minparams, pp.gridL, pp.gridL)
-    figure()
+    figure(figsize=(12,5))
     subplot(1,2,1)
     imshow( geoms_init , vmin = pp.lbwidth, vmax = pp.ubwidth)
     colorbar()
@@ -352,43 +362,56 @@ function run_opt(pname, presicion, parallel)
     savefig("$directory/geoms_$opt_date.png")
 
 
-    #save optimized reconstruction
+    #save optimized reconstructions and images
     if parallel == true
         fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
     else
         fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
     end
     
-    figure()
-    suptitle("optimized reconstruction")
+    fig1, ax1 = subplots(imgp.objN,3,figsize=(12,10))
+    fig1.suptitle("optimized reconstruction")
+
+    fig2, ax2 = subplots(imgp.objN,2,figsize=(8,10))
+    fig2.suptitle("optimized images")
     for obji = 1:imgp.objN
         Tmap = Tmaps[obji]
         B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
 
         image_Tmap_grid = make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel);
         Test = reshape(reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, optp.αinit, false, parallel), imgp.objL, imgp.objL)
-        subplot(imgp.objN, 3, obji*3 - 2)
-        imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
-        colorbar()
-        title(L"T(x,y) \ %$obji")
+        
+        p1 = ax1[obji,1].imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
+        fig1.colorbar(p1, ax=ax1[obji,1])
+        ax1[obji,1].set_title(L"T(x,y) \ %$obji")
     
-        subplot(imgp.objN, 3, obji*3 - 1)
-        imshow(Test, vmin = imgp.lbT, vmax = imgp.ubT)
-        colorbar()
-        title(L"T_{est}(x,y) \ %$obji")
+        p2 = ax1[obji,2].imshow(Test, vmin = imgp.lbT, vmax = imgp.ubT)
+        fig1.colorbar(p2, ax=ax1[obji,2])
+        ax1[obji,2].set_title(L"T_{est}(x,y) \ %$obji")
     
-        subplot(imgp.objN, 3, obji*3 )
-        imshow( (Test .- Tmap)./Tmap .* 100 )
-        colorbar()
-        title("% difference $obji")
+        p3 = ax1[ obji,3 ].imshow( (Test .- Tmap)./Tmap .* 100 )
+        fig1.colorbar(p3, ax = ax1[ obji,3 ])
+        ax1[obji,3].set_title("% difference $obji")
+    
+        p4 = ax2[obji,1].imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
+        fig2.colorbar(p4, ax = ax2[obji,1])
+        ax2[obji,1].set_title(L"T(x,y) \ %$obji")
+    
+        p5 = ax2[obji,2].imshow(image_Tmap_grid)
+        fig2.colorbar(p5, ax = ax2[obji,2])
+        ax2[obji,2].set_title("image $obji" )
     end
-    tight_layout()
-    savefig("$directory/reconstruction_optimized_$opt_date.png")
+    fig1.tight_layout()
+    fig1.savefig("$directory/reconstruction_optimized_$opt_date.png")
+
+    fig2.tight_layout()
+    fig2.savefig("$directory/images_optimized_$opt_date.png")
+
 
     #plot objective values
     if optp.save_objective_vals == true
         objdata = readdlm(file_save_objective_vals,',')
-        figure(figsize=(10,4))
+        figure(figsize=(12,5))
         suptitle(L"\mathrm{objective \  data } ,  \langle \frac{|| T - T_{est} ||^2}{  || T ||^2} \rangle_{T}")
         subplot(1,2,1)
         plot(objdata,".-")
@@ -399,6 +422,57 @@ function run_opt(pname, presicion, parallel)
         savefig("$directory/objective_vals_$opt_date.png")
     end
 
+    #plot PSFs (make sure there are only 21 of them)
+    if parallel == true
+        PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    else
+        PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    end
+    figure(figsize=(20,9))
+    for i = 1:21
+        subplot(3,7,i)
+        imshow(PSFs[i])
+        colorbar()
+        title("PSF for ν = $(round(freqs[i],digits=3) )")
+    end
+    tight_layout()
+    savefig("$directory/PSFs_$opt_date.png")
+
+    #now try reconstruction on more readable image
+    object_loadfilename = "MIT$(imgp.objL).csv"
+    filename = @sprintf("ImagingOpt.jl/objdata/%s",object_loadfilename)
+    lbT = imgp.lbT
+    ubT = imgp.ubT
+    diff = ubT - lbT
+    Tmap = readdlm(filename,',',typeof(freqs[1])).* diff .+ lbT
+
+    B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+    image_Tmap_grid = make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel);
+    Test = reshape(reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, optp.αinit, false, parallel), imgp.objL, imgp.objL)
+        
+    
+    figure(figsize=(14,4))
+    subplot(1,4,1)
+    imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
+    colorbar()
+    title(L"T(x,y)")
+
+    subplot(1,4,2)
+    imshow(Test, vmin = imgp.lbT, vmax = imgp.ubT)
+    colorbar()
+    title(L"T_{est}(x,y)")
+    
+    subplot(1,4,3)
+    imshow( (Test .- Tmap)./Tmap .* 100)
+    colorbar()
+    title("% difference")
+
+    subplot(1,4,4)
+    imshow(image_Tmap_grid)
+    colorbar()
+    title("image")
+    tight_layout()
+    savefig("$directory/MIT_reconstruction_$opt_date.png")
 end
 
 
