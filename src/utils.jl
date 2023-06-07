@@ -56,4 +56,4 @@ function arrarr_to_multi(arrarr)
     reshape(vcat(arrarr...), insz..., outsz...)
 end
 
-@nograd readline, Base.gc_num, Base.time_ns, Base.cumulative_compile_time_ns_before, Base.cumulative_compile_time_ns_after, Base.time_print
+
