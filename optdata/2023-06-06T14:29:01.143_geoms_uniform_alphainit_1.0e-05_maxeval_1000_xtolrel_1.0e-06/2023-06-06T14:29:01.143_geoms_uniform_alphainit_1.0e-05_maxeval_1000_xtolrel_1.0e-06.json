@@ -1,0 +1,52 @@
+{
+    "pp": {
+        "lbλ_μm": 8,
+        "ubλ_μm": 12,
+        "orderλ": 20,
+        "F_μm": 2000,
+        "depth_μm": 200000,
+        "gridL": 500,
+        "cellL_μm": 4,
+        "lbwidth_μm": 1.8,
+        "ubwidth_μm": 2.7,
+        "orderwidth": 320,
+        "thicknessg_μm": 10,
+        "materialg": "Si",
+        "thickness_sub_μm": 300,
+        "materialsub": "Si",
+        "in_air": "False",
+        "models_dir": "ImagingOpt.jl/surdata",
+        "blackbody_scaling": 1,
+        "PSF_scaling": 10000000000000
+    },
+    "imgp": {
+        "objL": 32,
+        "imgL": 64,
+        "binL": 1,
+        "objN": 3,
+        "object_type": "random",
+        "lbT": 280,
+        "ubT": 310,
+        "object_loadfilename": "oval8.csv",
+        "object_savefilestring": "random_280_310",
+        "noise_level": 0,
+        "noise_abs": false,
+        "emiss_noise_level": 0
+    },
+    "optp": {
+        "geoms_init_type": "uniform",
+        "geoms_init_loadfilename": "minimax_geoms_LD_MMA_2_inair=False_1.00e-06_500.csv",
+        "αinit": 1.0e-5,
+        "maxeval": 1000,
+        "xtol_rel": 1.0e-6,
+        "save_objective_vals": true,
+        "cg_maxiter_factor": 4
+    },
+    "recp": {
+        "T_init_type": "uniform",
+        "T_init_uniform_val": 295,
+        "ftol_rel": 1.0e-7,
+        "geoms_init_savefilestring": "minimax_1.00e-06_500",
+        "subtract_reg": 0
+    }
+}

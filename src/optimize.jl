@@ -246,6 +246,36 @@ function run_opt(pname, presicion, parallel)
     tight_layout()
     savefig("$directory/reconstruction_initial_$opt_date.png")
 
+
+    #MIT initial reconstruction
+    fig_MIT, ax_MIT = subplots(2,4,figsize=(14,8))
+    object_loadfilename_MIT = "MIT$(imgp.objL).csv"
+    filename_MIT = @sprintf("ImagingOpt.jl/objdata/%s",object_loadfilename_MIT)
+    lbT = imgp.lbT
+    ubT = imgp.ubT
+    diff = ubT - lbT
+    Tmap_MIT = readdlm(filename_MIT,',',typeof(freqs[1])).* diff .+ lbT
+
+    B_Tmap_grid_MIT = prepare_blackbody(Tmap_MIT, freqs, imgp, pp)
+    image_Tmap_grid_MIT = make_images(pp, imgp, B_Tmap_grid_MIT, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel);
+    Test_MIT = reshape(reconstruct_object(image_Tmap_grid_MIT, Tmap_MIT, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, optp.αinit, false, parallel), imgp.objL, imgp.objL)
+
+    p1 = ax_MIT[1,1].imshow(Tmap_MIT, vmin = imgp.lbT, vmax = imgp.ubT)
+    fig_MIT.colorbar(p1, ax=ax_MIT[1,1])
+    ax_MIT[1,1].set_title(L"T(x,y) \  \mathrm{initial}")
+
+    p2 = ax_MIT[1,2].imshow(Test_MIT, vmin = imgp.lbT, vmax = imgp.ubT)
+    fig_MIT.colorbar(p2, ax=ax_MIT[1,2])
+    ax_MIT[1,2].set_title(L"T_{est}(x,y) \  \mathrm{initial}")
+    
+    p3 = ax_MIT[1,3].imshow( (Test_MIT .- Tmap_MIT)./Tmap_MIT .* 100)
+    fig_MIT.colorbar(p3, ax=ax_MIT[1,3])
+    ax_MIT[1,3].set_title("% difference initial")
+
+    p4 = ax_MIT[1,4].imshow(image_Tmap_grid_MIT)
+    fig_MIT.colorbar(p4, ax=ax_MIT[1,4])
+    ax_MIT[1,4].set_title("image initial")
+
     function myfunc(parameters::Vector, grad::Vector)
         start = time()
         #parameters = geoms
@@ -350,13 +380,18 @@ function run_opt(pname, presicion, parallel)
 
     #save optimized metasurface parameters in an image (geoms)
     geoms = reshape(minparams, pp.gridL, pp.gridL)
-    figure(figsize=(12,5))
-    subplot(1,2,1)
+    figure(figsize=(16,5))
+    subplot(1,3,1)
     imshow( geoms_init , vmin = pp.lbwidth, vmax = pp.ubwidth)
     colorbar()
     title("initial metasurface \n parameters")
-    subplot(1,2,2)
+    subplot(1,3,2)
     imshow(geoms, vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    savefig("$directory/geoms_$opt_date.png")
+    subplot(1,3,3)
+    imshow(geoms)
     colorbar()
     title("optimized metasurface \n parameters")
     savefig("$directory/geoms_$opt_date.png")
@@ -438,41 +473,29 @@ function run_opt(pname, presicion, parallel)
     tight_layout()
     savefig("$directory/PSFs_$opt_date.png")
 
-    #now try reconstruction on more readable image
-    object_loadfilename = "MIT$(imgp.objL).csv"
-    filename = @sprintf("ImagingOpt.jl/objdata/%s",object_loadfilename)
-    lbT = imgp.lbT
-    ubT = imgp.ubT
-    diff = ubT - lbT
-    Tmap = readdlm(filename,',',typeof(freqs[1])).* diff .+ lbT
+    #now try reconstruction on more readable image    
+    image_Tmap_grid_MIT = make_images(pp, imgp, B_Tmap_grid_MIT, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel);
+    Test_MIT = reshape(reconstruct_object(image_Tmap_grid_MIT, Tmap_MIT, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, optp.αinit, false, parallel), imgp.objL, imgp.objL)
 
-    B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
-    image_Tmap_grid = make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel);
-    Test = reshape(reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, optp.αinit, false, parallel), imgp.objL, imgp.objL)
-        
+    p1 = ax_MIT[2,1].imshow(Tmap_MIT, vmin = imgp.lbT, vmax = imgp.ubT)
+    fig_MIT.colorbar(p1, ax=ax_MIT[2,1])
+    ax_MIT[2,1].set_title(L"T(x,y) \  \mathrm{optimized}")
+
+    p2 = ax_MIT[2,2].imshow(Test_MIT, vmin = imgp.lbT, vmax = imgp.ubT)
+    fig_MIT.colorbar(p2, ax=ax_MIT[2,2])
+    ax_MIT[2,2].set_title(L"T_{est}(x,y) \  \mathrm{optimized}")
     
-    figure(figsize=(14,4))
-    subplot(1,4,1)
-    imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
-    colorbar()
-    title(L"T(x,y)")
+    p3 = ax_MIT[2,3].imshow( (Test_MIT .- Tmap_MIT)./Tmap_MIT .* 100)
+    fig_MIT.colorbar(p3, ax=ax_MIT[2,3])
+    ax_MIT[2,3].set_title("% difference optimized")
 
-    subplot(1,4,2)
-    imshow(Test, vmin = imgp.lbT, vmax = imgp.ubT)
-    colorbar()
-    title(L"T_{est}(x,y)")
-    
-    subplot(1,4,3)
-    imshow( (Test .- Tmap)./Tmap .* 100)
-    colorbar()
-    title("% difference")
+    p4 = ax_MIT[2,4].imshow(image_Tmap_grid_MIT)
+    fig_MIT.colorbar(p4, ax=ax_MIT[2,4])
+    ax_MIT[2,4].set_title("image optimized")
 
-    subplot(1,4,4)
-    imshow(image_Tmap_grid)
-    colorbar()
-    title("image")
-    tight_layout()
-    savefig("$directory/MIT_reconstruction_$opt_date.png")
+
+    fig_MIT.tight_layout()
+    fig_MIT.savefig("$directory/MIT_reconstruction_$opt_date.png")
 end
 
 
