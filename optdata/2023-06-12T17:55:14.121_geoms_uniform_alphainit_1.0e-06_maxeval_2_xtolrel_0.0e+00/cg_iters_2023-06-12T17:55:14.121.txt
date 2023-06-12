@@ -1,0 +1,7 @@
+Default maxiter = 1024; set to maxiter = 4096 
+4096
+4096
+242
+4096
+4096
+1031
