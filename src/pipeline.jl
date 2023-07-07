@@ -159,7 +159,11 @@ end
 
 
 function reconstruction_objective_simplified(Test_flat, α, image_diff_flat, subtract_reg)
-    image_diff_flat'*image_diff_flat + α*( (Test_flat .- subtract_reg)'*(Test_flat .- subtract_reg) )
+    term1 = image_diff_flat'*image_diff_flat
+    term2 = α*( (Test_flat .- subtract_reg)'*(Test_flat .- subtract_reg) )
+    #println("obj:$( round(term1+term2,sigdigits=8) ) \t \t term1:$(round(term1,sigdigits=8) ) \t \t term2:$(round(term2,sigdigits=8) ) ")
+     @printf("obj: %30.8f term1: %30.8f term2: %30.8f \n" ,term1+term2, term1, term2)
+    term1 + term2
 end
 
 
@@ -237,8 +241,8 @@ function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, r
         end
         #obj = objective(Test_flat)
         obj = reconstruction_objective_simplified2(Test_flat, image_diff_flat, recp.subtract_reg)
-        println(obj)
-        flush(stdout)
+        #println(obj)
+        #flush(stdout)
         obj
     end
     

@@ -59,6 +59,7 @@ struct ImagingParams{FloatType <: AbstractFloat, IntType <: Signed}
     noise_level::FloatType
     noise_abs::Bool
     emiss_noise_level::FloatType
+    fixed_noise::Bool
 end
 
 struct OptimizeParams{FloatType <: AbstractFloat, IntType <: Signed}
@@ -146,7 +147,7 @@ function prepare_objects(imgp::ImagingParams, pp::PhysicsParams)
             T = rand(lbT:eps(floattype):ubT)
             Tmap = fill(T, imgp.objL, imgp.objL);
         end
-        Tmaps = [random_object(i) for i in 1:imgp.objN]
+        Tmaps = [random_object() for i in 1:imgp.objN]
         return Tmaps
     elseif imgp.object_type == "random"
         lbT = imgp.lbT
@@ -157,7 +158,7 @@ function prepare_objects(imgp::ImagingParams, pp::PhysicsParams)
             end
             Tmap = rand(lbT:eps(floattype):ubT,imgp.objL, imgp.objL)
         end
-        Tmaps = [random_object(i) for i in 1:imgp.objN]
+        Tmaps = [random_object() for i in 1:imgp.objN]
         return Tmaps
     elseif imgp.object_type == "load_scale_single"
         #expects loaded array to be values from 0 to 1. scales values from lbT to ubT
@@ -195,8 +196,13 @@ function prepare_blackbody(Tmaps::Vector, freqs::Vector, imgp::ImagingParams, pp
 end
 
 function prepare_reconstruction(recp::ReconstructionParams, imgp::ImagingParams)
+    floattype = typeof(imgp.lbT)
     if recp.T_init_type == "uniform"
         Tinit = repeat( [recp.T_init_uniform_val,], imgp.objL^2)
+    elseif recp.T_init_type == "random"
+        lbT = imgp.lbT
+        ubT = imgp.ubT
+        Tinit = rand(lbT:eps(floattype):ubT,imgp.objL^2)
     end
     Tinit
 end

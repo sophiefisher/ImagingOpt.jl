@@ -35,14 +35,16 @@
         "ubT":310,
         "object_loadfilename":"oval8.csv",
         "object_savefilestring":"random_280_310",
-        "noise_level": 0.0,
+        "noise_level": 0.00,
         "noise_abs":false,
-        "emiss_noise_level":0.00
+        "emiss_noise_level":0.00,
+        "fixed_noise":true
+        
     },
     "optp": {
         "geoms_init_type":"uniform",
         "geoms_init_loadfilename":"minimax_geoms_LD_MMA_2_inair=False_1.00e-06_500.csv",
-        "αinit":1e-6,
+        "αinit":1e-5,
         "maxeval":2,
         "xtol_rel":0,
         "save_objective_vals":true,
@@ -54,6 +56,6 @@
         "T_init_uniform_val":295,
         "ftol_rel":1e-7,
         "geoms_init_savefilestring":"minimax_1.00e-06_500",
-        "subtract_reg":0
+        "subtract_reg":295
     }
 }
