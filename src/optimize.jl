@@ -166,8 +166,8 @@ end
 #end
 
 #optimize metasurface parameters for fixed alpha; no noise
-function run_opt(pname, presicion, parallel, opt_date)
-    params = get_params(pname, presicion)
+function run_opt(params, presicion, parallel, opt_date)
+    #params = get_params(pname, presicion)
     pp = params.pp
     imgp = params.imgp
     optp = params.optp
@@ -324,8 +324,8 @@ function run_opt(pname, presicion, parallel, opt_date)
 end
 
 
-function process_opt(pname, presicion, parallel, opt_date)
-    params = get_params(pname, presicion)
+function process_opt(params, presicion, parallel, opt_date)
+    #params = get_params(pname, presicion)
     pp = params.pp
     imgp = params.imgp
     optp = params.optp
