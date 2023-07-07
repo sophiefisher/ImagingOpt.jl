@@ -33,7 +33,7 @@ StructTypes.StructType(::Type{JobParams}) = StructTypes.Struct()
 const PARAMS_DIR = "ImagingOpt.jl/params"
 
 
-function get_params(pname, presicion)
+function get_params(pname, presicion, dir=PARAMS_DIR )
     
     if presicion == "double"
         floattype = Float64
@@ -43,7 +43,7 @@ function get_params(pname, presicion)
         inttype = Int32
     end
     
-    jsonread = JSON3.read(read("$PARAMS_DIR/$pname.json", String))
+    jsonread = JSON3.read(read("$dir/$pname.json", String))
     pp_temp = jsonread.pp
     pp = PhysicsParams{floattype, inttype}([pp_temp[key] for key in keys(pp_temp)]...)
     
@@ -166,8 +166,8 @@ end
 #end
 
 #optimize metasurface parameters for fixed alpha; no noise
-function run_opt(params, presicion, parallel, opt_date)
-    #params = get_params(pname, presicion)
+function run_opt(pname, presicion, parallel, opt_date)
+    params = get_params(pname, presicion)
     pp = params.pp
     imgp = params.imgp
     optp = params.optp
@@ -320,19 +320,19 @@ function run_opt(params, presicion, parallel, opt_date)
     geoms_filename = "$directory/geoms_$opt_date.csv"
     writedlm( geoms_filename,  minparams,',')
 
-    
+    opt_id
 end
 
 
-function process_opt(params, presicion, parallel, opt_date)
-    #params = get_params(pname, presicion)
+function process_opt(presicion, parallel, opt_date, opt_id)
+    directory = "ImagingOpt.jl/optdata/$opt_id"
+    pname = "$opt_id.json"
+    
+    params = get_params(pname, presicion, directory)
     pp = params.pp
     imgp = params.imgp
     optp = params.optp
     recp = params.recp
-    
-    opt_id = @sprintf("%s_geoms_%s_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", opt_date, optp.geoms_init_type, optp.αinit, optp.maxeval, optp.xtol_rel)
-    directory = @sprintf("ImagingOpt.jl/optdata/%s", opt_id)
     
     surrogates, freqs = prepare_surrogate(pp)
     Tinit_flat = prepare_reconstruction(recp, imgp)
