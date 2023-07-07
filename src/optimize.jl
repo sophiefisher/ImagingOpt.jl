@@ -169,6 +169,7 @@ end
 function run_opt(pname, presicion, parallel, opt_date)
     params = get_params(pname, presicion)
     println("params loaded")
+    flush(stdout)
     pp = params.pp
     imgp = params.imgp
     optp = params.optp
