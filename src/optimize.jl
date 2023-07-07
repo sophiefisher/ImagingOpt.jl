@@ -168,6 +168,7 @@ end
 #optimize metasurface parameters for fixed alpha; no noise
 function run_opt(pname, presicion, parallel, opt_date)
     params = get_params(pname, presicion)
+    println("params loaded")
     pp = params.pp
     imgp = params.imgp
     optp = params.optp
@@ -326,9 +327,8 @@ end
 
 function process_opt(presicion, parallel, opt_date, opt_id)
     directory = "ImagingOpt.jl/optdata/$opt_id"
-    pname = "$opt_id.json"
     
-    params = get_params(pname, presicion, directory)
+    params = get_params(opt_id, presicion, directory)
     pp = params.pp
     imgp = params.imgp
     optp = params.optp
