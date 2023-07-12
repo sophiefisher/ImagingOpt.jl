@@ -162,8 +162,8 @@ function reconstruction_objective_simplified(Test_flat, α, image_diff_flat, sub
     term1 = image_diff_flat'*image_diff_flat
     term2 = α*( (Test_flat .- subtract_reg)'*(Test_flat .- subtract_reg) )
     #println("obj:$( round(term1+term2,sigdigits=8) ) \t \t term1:$(round(term1,sigdigits=8) ) \t \t term2:$(round(term2,sigdigits=8) ) ")
-    #@printf("obj: %30.8f term1: %30.8f term2: %30.8f \n" ,term1+term2, term1, term2)
-    term1 + term2
+    @printf("obj: %30.8f term1: %30.8f term2: %30.8f \n" ,term1+term2, term1, term2)
+    term1, term2
 end
 
 
@@ -212,14 +212,17 @@ end
 function gradient_reconstruction_T_autodiff(Test_flat::Vector, image_Tmap_flat, pp, imgp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, parallel)
     function obj(Test_flat)
         image_diff_flat = get_image_diff_flat(Test_flat, image_Tmap_flat, pp, imgp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
-        reconstruction_objective_simplified(Test_flat, α, image_diff_flat, recp.subtract_reg)
+        term1, term2 = reconstruction_objective_simplified(Test_flat, α, image_diff_flat, recp.subtract_reg)
+        term1 + term2
     end
     
     Zygote.gradient(obj, Test_flat)[1]
 end
 
 #reconstruction
-function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, save::Bool=true, parallel::Bool=true)
+function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, save_Tmaps::Bool=true, save_objvals::Bool=true, parallel::Bool=true)
+    rec_id = Dates.now()
+        
     nF = pp.orderfreq + 1
     image_Tmap_flat = image_Tmap_grid[:]
     
@@ -231,6 +234,9 @@ function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, r
     
     #objective(Test_flat::Vector) = reconstruction_objective(Test_flat, image_Tmap_flat, pp, imgp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, parallel)
 
+    if save_objvals
+        objvals_filename = "ImagingOpt.jl/recdata/objvals_$(rec_id).csv"
+    end
 
     function myfunc(Test_flat::Vector, grad::Vector)
         Test_flat = convert.(typeof(freqs[1]),Test_flat)
@@ -240,10 +246,15 @@ function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, r
             grad[:] = gradient_reconstruction_T2(Test_flat, image_diff_flat)
         end
         #obj = objective(Test_flat)
-        obj = reconstruction_objective_simplified2(Test_flat, image_diff_flat, recp.subtract_reg)
-        #println(obj)
-        #flush(stdout)
-        obj
+        term1, term2 = reconstruction_objective_simplified2(Test_flat, image_diff_flat, recp.subtract_reg)
+
+        if save_objvals
+            open(objvals_filename, "a") do io
+                writedlm(io, [term1+term2 term1 term2], ',')
+            end
+        end
+            
+        term1+term2
     end
     
     opt = Opt(:LD_LBFGS, imgp.objL^2)
@@ -259,8 +270,8 @@ function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, r
     (minf,minT,ret) = optimize(opt, Tinit_flat)
     minT = convert.(typeof(freqs[1]),minT)
     
-    if save==true
-        Tmaps_filename = @sprintf("ImagingOpt.jl/recdata/Tmap_%s_%s_%d_%d_%.2e_%.2f_%s_%.2e_%.2f.csv", imgp.object_savefilestring, optp.geoms_init_savefilestring,  imgp.objL, imgp.imgL, α, imgp.noise_level, string(imgp.noise_abs), recp.ftol_rel, imgp.emiss_noise_level);
+    if save_Tmaps
+        Tmaps_filename = "ImagingOpt.jl/recdata/Tmaps_$(rec_id).csv"
         writedlm( Tmaps_filename,  hcat( minT, Tmap[:]),',')
     end
     #println(@sprintf("minf is %.2f", minf))
