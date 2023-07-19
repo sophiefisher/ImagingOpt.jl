@@ -110,7 +110,7 @@ function get_fftPSF(freq, surrogate, pp, imgp, geoms, plan_nearfar, plan_PSF, pa
     fftPSF = PSF_to_fftPSF(PSF, plan_PSF)
 end
 
-function make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+function make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel)
     nF = pp.orderfreq + 1
     
     floattype = typeof(freqs[1])
@@ -138,7 +138,7 @@ function make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfa
     if imgp.noise_abs == true
         image_Tmap_grid = abs.(image_Tmap_grid_noiseless .+ mean(image_Tmap_grid_noiseless)* imgp.noise_level .*randn.(floattype) )
     else
-        image_Tmap_grid = image_Tmap_grid_noiseless .+ mean(image_Tmap_grid_noiseless)* imgp.noise_level .*randn.(floattype)
+        image_Tmap_grid = image_Tmap_grid_noiseless .+ mean(image_Tmap_grid_noiseless)*noise
     end
     image_Tmap_grid
 end
@@ -385,7 +385,7 @@ function build_hessian(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfar, pl
 
 end
 
-function jacobian_vp_undiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, B_Tmap_grid, parallel)
+function jacobian_vp_undiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, B_Tmap_grid, noise, parallel)
     nF = pp.orderfreq + 1
     #fftPSFs = [get_fftPSF(freqs[iF], surrogates[iF], weights[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel) for iF in 1:pp.orderfreq+1]
     function get_fftPSF_iF(iF)
@@ -402,7 +402,7 @@ function jacobian_vp_undiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
     else
         image_Test_flat  = sum(iF->G(B_Test_grid[:,:,iF], fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
     end
-    image_diff_grid =  make_images(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel) - reshape(image_Test_flat, imgp.imgL, imgp.imgL)
+    image_diff_grid =  make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel) - reshape(image_Test_flat, imgp.imgL, imgp.imgL)
 
     function term2_iF(iF)
         -2 * lambda' * Diagonal(  dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) ) * Gtranspose( image_diff_grid,  fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF)
@@ -417,8 +417,8 @@ function jacobian_vp_undiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
     jvp_undiff
 end
 
-function jacobian_vp_autodiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, Tmap, parallel)
-    gradient(geoms -> jacobian_vp_undiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, Tmap, parallel), geoms)[1]
+function jacobian_vp_autodiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, B_Tmap_grid, noise, parallel)
+    gradient(geoms -> jacobian_vp_undiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, B_Tmap_grid, noise, parallel), geoms)[1]
 
 end
         
@@ -450,7 +450,7 @@ function uvector_dot_Gtransposedg_vvector(pp, imgp, freq, surrogate, incident, n
 
 end
         
-function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, B_Tmap_grid, fftPSFs, parallel)
+function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, B_Tmap_grid, noise, fftPSFs, parallel)
     nF = pp.orderfreq + 1
     psfL = imgp.imgL + imgp.objL
     freqend = freqs[end]
@@ -465,8 +465,7 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
         image_Test_flat  = sum(iF->G(B_Test_grid[:,:,iF], fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
     end
     image_diff_grid =  image_Tmap_grid - reshape(image_Test_flat, imgp.imgL, imgp.imgL)
-    
-    term1 = zeros(typeof(freqs[1]), pp.gridL^2)
+   
             
     function term1_iF(iF)
         freq = freqs[iF]
@@ -475,7 +474,7 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
         incident = prepare_incident(pp,freq)  
         n2f_kernel = prepare_n2f_kernel(pp,freq, plan_nearfar);
         uvector = (-2 * lambda .* dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) ) 
-        uvector_dot_Gtransposedg_vvector(pp, imgp, freq, surrogate, incident, n2f_kernel, geoms, weight, freqend, freq1, uvector, image_diff_grid, plan_nearfar, plan_PSF, parallel)[:]
+        uvector_dot_Gtransposedg_vvector(pp, imgp, freq, surrogate, incident, n2f_kernel, geoms, weight, freqend, freq1, uvector, image_diff_grid, plan_nearfar, plan_PSF, parallel)
     end
             
     if parallel == true
@@ -488,12 +487,12 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
     if parallel == true
         vgrid2  = ThreadsX.sum(iF->G( reshape(dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) .* lambda , imgp.objL, imgp.objL)  , fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
     else
-        vgrid2  = sum(iF->G(reshape(dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) .* lambda , imgp.objL, imgp.objL), fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
+        vgrid2  = sum(iF->G(reshape(dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) .* lambda , imgp.objL, imgp.objL), fftPSFs[iF], weights[iF], freq1, freqend, plan_PSF), 1:nF)
     end
     vgrid2 = reshape(vgrid2, imgp.imgL, imgp.imgL)
         
         
-    term2 = zeros(typeof(freqs[1]), pp.gridL^2)
+
     function term2_iF(iF)
         freq = freqs[iF]
         weight = weights[iF]
@@ -501,7 +500,7 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
         incident = prepare_incident(pp,freq)  
         n2f_kernel = prepare_n2f_kernel(pp,freq, plan_nearfar);
         uvector = -2*( B_Tmap_grid[:,:,iF]  -  B_Test_grid[:,:,iF])[:]
-        uvector_dot_Gtransposedg_vvector(pp, imgp, freq, surrogate, incident, n2f_kernel, geoms, weight, freqend, freq1, uvector, vgrid2, plan_nearfar, plan_PSF, parallel)[:]
+        uvector_dot_Gtransposedg_vvector(pp, imgp, freq, surrogate, incident, n2f_kernel, geoms, weight, freqend, freq1, uvector, vgrid2, plan_nearfar, plan_PSF, parallel)
     end
             
     if parallel == true
@@ -509,8 +508,34 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
     else
         term2  = sum(iF->term2_iF(iF), 1:nF)
     end
+        
+    function term3constant_iF(iF)
+        (-2 / imgp.imgL^2 ) * lambda' * (dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) .* Gtranspose(noise, fftPSFs[iF], weights[iF], freq1, freqend, plan_PSF) )
+    end
     
-    reshape(term1 ,pp.gridL, pp.gridL) + reshape(term2, pp.gridL, pp.gridL)
+    if parallel == true
+        term3constant  = ThreadsX.sum(iF->term3constant_iF(iF), 1:nF)
+    else
+        term3constant  = sum(iF->term3constant_iF(iF), 1:nF)
+    end
+        
+    function term3_iF(iF)
+        freq = freqs[iF]
+        weight = weights[iF]
+        surrogate = surrogates[iF]
+        incident = prepare_incident(pp,freq)  
+        n2f_kernel = prepare_n2f_kernel(pp,freq, plan_nearfar);
+        uvector_dot_Gtransposedg_vvector(pp, imgp, freq, surrogate, incident, n2f_kernel, geoms, weight, freqend, freq1, B_Tmap_grid[:,:,iF], ones(imgp.imgL, imgp.imgL), plan_nearfar, plan_PSF, parallel)
+    end
+        
+    if parallel == true
+        term3  = term3constant * ThreadsX.sum(iF->term3_iF(iF), 1:nF)
+    else
+        term3  = term3constant  * sum(iF->term3_iF(iF), 1:nF)
+    end
+    
+    term1 + term2 + term3
+
     
 end
     

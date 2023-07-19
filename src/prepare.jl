@@ -59,17 +59,17 @@ struct ImagingParams{FloatType <: AbstractFloat, IntType <: Signed}
     noise_level::FloatType
     noise_abs::Bool
     emiss_noise_level::FloatType
-    fixed_noise::Bool
 end
 
 struct OptimizeParams{FloatType <: AbstractFloat, IntType <: Signed}
     geoms_init_type::String
     geoms_init_loadfilename::String
     αinit::FloatType
+    α_scaling::FloatType
     maxeval::IntType
     xtol_rel::FloatType
-    save_objective_vals::Bool
     cg_maxiter_factor::IntType
+    optimize_alpha::Bool
 end
 
 struct ReconstructionParams{FloatType <: AbstractFloat}
@@ -205,4 +205,8 @@ function prepare_reconstruction(recp::ReconstructionParams, imgp::ImagingParams)
         Tinit = rand(lbT:eps(floattype):ubT,imgp.objL^2)
     end
     Tinit
+end
+
+function prepare_noises(imgp::ImagingParams)
+    noises = [imgp.noise_level .* randn(imgp.imgL, imgp.imgL) for i in 1:imgp.objN]
 end
