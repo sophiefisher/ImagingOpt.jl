@@ -9,11 +9,11 @@
         "gridL": 700,
         
         "cellL_μm":4,
-        "lbwidth_μm":1.75,
-        "ubwidth_μm":2.77,
+        "lbwidth_μm":1.8,
+        "ubwidth_μm":2.7,
         "lbwidth_μm_load":1.7,
         "ubwidth_μm_load":2.8,
-        "orderwidth":160,
+        "orderwidth":640,
         "thicknessg_μm":10,
         "materialg":"Si",
         
@@ -28,7 +28,7 @@
     },
  
     "imgp": {
-        "objL": 8,
+        "objL": 32,
         "imgL": 64,
         "binL": 7,
         "objN": 3,
