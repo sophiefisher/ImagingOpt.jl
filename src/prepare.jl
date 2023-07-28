@@ -11,7 +11,11 @@ struct PhysicsParams{FloatType <: AbstractFloat, IntType <: Signed}
     cellL::FloatType #unit cell size 
     lbwidth::FloatType #lower bound of pillar width 
     ubwidth::FloatType #upper bound of pillar width 
-    orderwidth::IntType #order of Chebyshev polynomial in width; number of points is orderwidth + 1 
+    
+    lbwidth_load::FloatType #lower bound of pillar width (for chebyshev interpolation)
+    ubwidth_load::FloatType #upper bound of pillar width (for chebyshev interpolation)
+    orderwidth::IntType #order of Chebyshev polynomial in width; number of points is orderwidth + 1
+    
     thicknessg::FloatType #pillar thickness 
     materialg::String #material of the pillars 
     
@@ -25,14 +29,17 @@ struct PhysicsParams{FloatType <: AbstractFloat, IntType <: Signed}
     PSF_scaling::FloatType #scaling of the PSFs
     
     
-    function PhysicsParams{FloatType, IntType}(lbλ_μm, ubλ_μm, orderλ, F_μm, depth_μm, gridL, cellL_μm, lbwidth_μm, ubwidth_μm, orderwidth, thicknessg_μm, materialg, thickness_sub_μm, materialsub, in_air, models_dir, blackbody_scaling, PSF_scaling) where {FloatType <: AbstractFloat} where {IntType <: Signed} 
+    function PhysicsParams{FloatType, IntType}(lbλ_μm, ubλ_μm, orderλ, F_μm, depth_μm, gridL, cellL_μm, lbwidth_μm, ubwidth_μm, lbwidth_μm_load, ubwidth_μm_load, orderwidth, thicknessg_μm, materialg, thickness_sub_μm, materialsub, in_air, models_dir, blackbody_scaling, PSF_scaling) where {FloatType <: AbstractFloat} where {IntType <: Signed} 
         wavcen = round(1/mean([1/lbλ_μm, 1/ubλ_μm]),digits=2)
 
         lbfreq = wavcen/ubλ_μm
         ubfreq = wavcen/lbλ_μm
 
         lbwidth=lbwidth_μm/wavcen 
-        ubwidth=ubwidth_μm/wavcen 
+        ubwidth=ubwidth_μm/wavcen
+        
+        lbwidth_load = lbwidth_μm_load/wavcen
+        ubwidth_load = ubwidth_μm_load/wavcen
 
         F = F_μm/wavcen
         depth = depth_μm/wavcen
@@ -40,7 +47,7 @@ struct PhysicsParams{FloatType <: AbstractFloat, IntType <: Signed}
         thicknessg = thicknessg_μm/wavcen
         thickness_sub = thickness_sub_μm/wavcen
         
-        new(lbfreq, ubfreq, orderλ, wavcen, F, depth, gridL, cellL, lbwidth, ubwidth, orderwidth, thicknessg, materialg, thickness_sub, materialsub, in_air, models_dir, blackbody_scaling, PSF_scaling)
+        new(lbfreq, ubfreq, orderλ, wavcen, F, depth, gridL, cellL, lbwidth, ubwidth, lbwidth_load, ubwidth_load,  orderwidth, thicknessg, materialg, thickness_sub, materialsub, in_air, models_dir, blackbody_scaling, PSF_scaling)
     end
     
 end
@@ -115,7 +122,7 @@ function prepare_n2f_kernel(pp::PhysicsParams,freq::AbstractFloat, plan_nearfar:
 end
 
 function prepare_surrogate(pp::PhysicsParams)
-    models1D = get_models1D(pp.materialsub, pp.materialg, pp.in_air, pp.lbfreq, pp.ubfreq, pp.orderfreq, pp.lbwidth, pp.ubwidth, pp.orderwidth, pp.models_dir)
+    models1D = get_models1D(pp.materialsub, pp.materialg, pp.in_air, pp.lbfreq, pp.ubfreq, pp.orderfreq, pp.lbwidth_load, pp.ubwidth_load, pp.orderwidth, pp.models_dir)
     
 end
 
@@ -158,7 +165,7 @@ function prepare_objects(imgp::ImagingParams, pp::PhysicsParams)
             end
             Tmap = rand(lbT:eps(floattype):ubT,imgp.objL, imgp.objL)
         end
-        Tmaps = [random_object() for i in 1:imgp.objN]
+        Tmaps = [random_object(i) for i in 1:imgp.objN]
         return Tmaps
     elseif imgp.object_type == "load_scale_single"
         #expects loaded array to be values from 0 to 1. scales values from lbT to ubT

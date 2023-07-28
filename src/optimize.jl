@@ -283,7 +283,7 @@ function run_opt(pname, presicion, parallel, opt_date)
             if length(grad) > 0
                 if optp.optimize_alpha
                     grad[1:end-1] = grad[1:end-1] + ( (1/imgp.objN) * jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, B_Tmap_grid, noise, fftPSFs, parallel)[:] )
-                    grad[end] = grad[end] + ((2 * (1/imgp.objN) * optp.α_scaling ) * (lambda' *  Test_flat))
+                    grad[end] = grad[end] + ((2 * (1/imgp.objN) * optp.α_scaling ) * (lambda' * (Test_flat .- recp.subtract_reg ) ))
                 else
                     grad[1:end] = grad[1:end] + ( (1/imgp.objN) * jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, B_Tmap_grid, noise, fftPSFs, parallel)[:] )
                 end
