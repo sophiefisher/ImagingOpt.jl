@@ -37,7 +37,7 @@
         "ubT":310,
         "object_loadfilename":"oval8.csv",
         "object_savefilestring":"random_280_310",
-        "noise_level": 0.05,
+        "noise_level": 0.02,
         "noise_abs":false,
         "emiss_noise_level":0.00
         
@@ -47,7 +47,7 @@
         "geoms_init_loadfilename":"minimax_geoms_LD_MMA_2_inair=False_1.00e-06_500.csv",
         "αinit":1e-2,
         "α_scaling":1e2,
-        "maxeval":100,
+        "maxeval":1000,
         "xtol_rel":0,
         "cg_maxiter_factor":4,
         "optimize_alpha":true
