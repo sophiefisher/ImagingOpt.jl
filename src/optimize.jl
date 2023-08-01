@@ -162,8 +162,126 @@ function design_minimax_lens(pname, presicion="double", parallel=true, opt_name=
 end
 =#
 
-#function design_singlefreq_lens()
-#end
+function design_singlefreq_lens(pname, presicion, parallel, opt_date)
+    params = get_params(pname, presicion)
+    println("params loaded")
+    flush(stdout)
+    pp = params.pp
+    imgp = params.imgp
+    
+    opt_id = @sprintf("%s_singlefreq_lens", opt_date)
+    directory = @sprintf("ImagingOpt.jl/geomsoptdata/%s", opt_id)
+    Base.Filesystem.mkdir( directory )
+    
+    #save input parameters in json file
+    jsonread = JSON3.read(read("$PARAMS_DIR/$pname.json", String))
+    open("$directory/$opt_id.json", "w") do io
+        JSON3.pretty(io, jsonread)
+    end
+
+    #file for saving objective vals
+    file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"   
+
+    surrogates, freqs = prepare_surrogate(pp)
+    middle_freq_idx = (length(freqs) + 1) ÷ 2
+    surrogate = surrogates[middle_freq_idx]
+    freq = freqs[middle_freq_idx]
+
+    plan_nearfar = plan_fft!(zeros(Complex{typeof(freqs[1])}, (2*pp.gridL, 2*pp.gridL)), flags=FFTW.MEASURE)
+
+    geoms_init = fill((pp.lbwidth + pp.ubwidth)/2, pp.gridL^2)
+
+    psfL = imgp.objL + imgp.imgL
+    middle = div(psfL,2)
+
+    function objective(geoms_flat)
+        geoms_grid = reshape(geoms_flat, pp.gridL, pp.gridL)
+        PSF = get_PSF(freq, surrogate, pp, imgp, geoms_grid, plan_nearfar, parallel)
+        PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1]
+    end
+
+    function myfunc(parameters::Vector, grad::Vector)
+        obj = objective(parameters)
+    
+        if length(grad) > 0
+            grad[1:end] = Zygote.gradient(objective, parameters)[1]
+        end
+
+        open(file_save_objective_vals, "a") do io
+            writedlm(io, obj, ',')
+        end
+
+        obj
+    end
+
+    opt = Opt(:LD_LBFGS, pp.gridL^2)
+    opt.max_objective = myfunc
+    opt.lower_bounds = pp.lbwidth
+    opt.upper_bounds = pp.ubwidth
+    opt.xtol_rel = 1e-8
+    opt.maxeval = 5000
+
+    (minobj,mingeoms,ret) = optimize(opt, geoms_init)
+    println("RETURN VALUE IS $ret")
+
+    #save output data in json file
+    dict_output = Dict("return_val" => ret)
+    output_data_filename = "$directory/output_data_$opt_date.json"
+    open(output_data_filename,"w") do io
+        JSON3.pretty(io, dict_output)
+    end
+
+    #save optimized metasurface parameters (geoms)
+    geoms_filename = "$directory/geoms_singlefreq_lens_$opt_date.csv"
+    writedlm( geoms_filename,  mingeoms,',')
+
+    #process opt
+    geoms = reshape(mingeoms, pp.gridL, pp.gridL)
+
+    #plot objective values
+    objdata = readdlm(file_save_objective_vals,',')
+    figure(figsize=(20,6))
+    suptitle("objective data")
+    subplot(1,2,1)
+    plot(objdata,".-")
+
+    subplot(1,2,2)
+    semilogy(objdata,".-")
+    tight_layout()
+    savefig("$directory/objective_vals_$opt_date.png")
+
+    #plot geoms
+    figure(figsize=(16,5))
+    subplot(1,3,1)
+    imshow( reshape(geoms_init, pp.gridL, pp.gridL) , vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("initial metasurface \n parameters")
+    subplot(1,3,2)
+    imshow(geoms, vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    subplot(1,3,3)
+    imshow(geoms)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    savefig("$directory/geoms_singlefreq_lens_$opt_date.png")
+
+    #plot PSFs (make sure there are only 21 of them)
+    if parallel == true
+        PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    else
+        PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    end
+    figure(figsize=(20,9))
+    for i = 1:21
+        subplot(3,7,i)
+        imshow(PSFs[i])
+        colorbar()
+        title("PSF for ν = $(round(freqs[i],digits=3) )")
+    end
+    tight_layout()
+    savefig("$directory/PSFs_$opt_date.png")
+end
 
 #optimize metasurface parameters for fixed alpha; no noise
 function run_opt(pname, presicion, parallel, opt_date)
@@ -467,7 +585,6 @@ function process_opt(presicion, parallel, opt_date, opt_id)
     imshow(geoms, vmin = pp.lbwidth, vmax = pp.ubwidth)
     colorbar()
     title("optimized metasurface \n parameters")
-    savefig("$directory/geoms_$opt_date.png")
     subplot(1,3,3)
     imshow(geoms)
     colorbar()
