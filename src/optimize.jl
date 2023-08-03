@@ -693,15 +693,17 @@ function process_opt(presicion, parallel, opt_date, opt_id)
     fig_MIT.savefig("$directory/MIT_reconstruction_$opt_date.png")
 
     #save alpha vals
-    figure(figsize=(20,6))
-    suptitle(L"\alpha \mathrm{values }")
-    subplot(1,2,1)
-    plot(alpha_vals,".-")
+    if optp.optimize_alpha
+        figure(figsize=(20,6))
+        suptitle(L"\alpha \mathrm{values }")
+        subplot(1,2,1)
+        plot(alpha_vals,".-")
 
-    subplot(1,2,2)
-    semilogy(alpha_vals,".-")
-    tight_layout()
-    savefig("$directory/alpha_vals_$opt_date.png")
+        subplot(1,2,2)
+        semilogy(alpha_vals,".-")
+        tight_layout()
+        savefig("$directory/alpha_vals_$opt_date.png")
+    end
 
 end
 
