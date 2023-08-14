@@ -1,7 +1,0 @@
-Default maxiter = 1024; set to maxiter = 4096 
-249
-190
-534
-4096
-4086
-4096
