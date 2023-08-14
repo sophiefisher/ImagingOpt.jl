@@ -535,6 +535,22 @@ function process_opt(presicion, parallel, opt_date, opt_id)
     tight_layout()
     savefig("$directory/reconstruction_initial_$opt_date.png")
     
+    #plot PSFs (make sure there are only 21 of them)
+    if parallel == true
+        PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, parallel),1:pp.orderfreq+1)
+    else
+        PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, parallel),1:pp.orderfreq+1)
+    end
+    figure(figsize=(20,9))
+    for i = 1:21
+        subplot(3,7,i)
+        imshow(PSFs[i])
+        colorbar()
+        title("PSF for ν = $(round(freqs[i],digits=3) )")
+    end
+    tight_layout()
+    savefig("$directory/PSFs_initial_$opt_date.png")
+    
     #MIT initial reconstruction
     fig_MIT, ax_MIT = subplots(2,4,figsize=(14,8))
     object_loadfilename_MIT = "MIT$(imgp.objL).csv"
@@ -666,7 +682,7 @@ function process_opt(presicion, parallel, opt_date, opt_id)
         title("PSF for ν = $(round(freqs[i],digits=3) )")
     end
     tight_layout()
-    savefig("$directory/PSFs_$opt_date.png")
+    savefig("$directory/PSFs_optimized_$opt_date.png")
 
     #now try reconstruction on more readable image    
     image_Tmap_grid_MIT = make_image(pp, imgp, B_Tmap_grid_MIT, fftPSFs, freqs, weights, imgp.noise_level .* randn(imgp.imgL, imgp.imgL), plan_nearfar, plan_PSF, parallel);
