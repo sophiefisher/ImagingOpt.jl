@@ -606,6 +606,10 @@ end
 
 #TO DO: get rid of eventually
 function run_opt(pname, presicion, parallel, opt_date)
+    params = get_params(pname, presicion)
+    println("params loaded")
+    flush(stdout)
+    optp = params.optp
     if optp.stochastic
         opt_id = run_stochastic_opt(pname, presicion, parallel, opt_date)
     else
