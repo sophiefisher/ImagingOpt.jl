@@ -284,7 +284,7 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
 end
 
 #optimize metasurface parameters for fixed alpha; no noise
-function run_opt(pname, presicion, parallel, opt_date)
+function run_deterministic_opt(pname, presicion, parallel, opt_date)
     params = get_params(pname, presicion)
     println("params loaded")
     flush(stdout)
@@ -385,27 +385,6 @@ function run_opt(pname, presicion, parallel, opt_date)
             Test_flat = reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
             
             objective = objective +  (1/imgp.objN) * ( (Tmap[:] - Test_flat)'*(Tmap[:] - Test_flat) ) / (Tmap[:]' * Tmap[:])
-
-            #=term1plusterm2_hessian = term1plusterm2_hes(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, parallel);
-            H = Hes(pp.orderfreq + 1, pp.wavcen, imgp.objL, imgp.imgL, term1plusterm2_hessian, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, pp.blackbody_scaling, parallel)
-            b = 2 * (Tmap[:] - Test_flat) / (Tmap[:]' * Tmap[:])
-
-            lambda = zeros(typeof(freqs[1]), imgp.objL^2)
-            lambda, ch = cg!(lambda, H, b, log=true, maxiter = optp.cg_maxiter_factor * imgp.objL^2);
-            println(ch)
-            flush(stdout)
-            open(file_save_cg_iters, "a") do io
-                writedlm(io, length(ch[:resnorm]), ',')
-            end
-        
-            if length(grad) > 0
-                if optp.optimize_alpha
-                    grad[1:end-1] = grad[1:end-1] + ( (1/imgp.objN) * jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, B_Tmap_grid, noise, fftPSFs, parallel)[:] )
-                    grad[end] = grad[end] + ((2 * (1/imgp.objN) * (1/optp.α_scaling) ) * (lambda' * (Test_flat .- recp.subtract_reg ) ))
-                else
-                    grad[1:end] = grad[1:end] + ( (1/imgp.objN) * jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, B_Tmap_grid, noise, fftPSFs, parallel)[:] )
-                end
-            end=#
             
             grad_obji, num_cg_iters = dloss_dparams(pp, imgp, optp, recp, geoms, α, Tmap, B_Tmap_grid, Test_flat, image_Tmap_grid, noise, fftPSFs, surrogates, freqs, plan_nearfar, plan_PSF, weights, parallel)
             open(file_save_cg_iters, "a") do io
@@ -480,6 +459,160 @@ function run_opt(pname, presicion, parallel, opt_date)
     opt_id
 end
 
+#TO DO: combine this function with run_opt above
+function run_stochastic_opt(pname, presicion, parallel, opt_date)
+    params = get_params(pname, presicion)
+    println("params loaded")
+    flush(stdout)
+    pp = params.pp
+    imgp = params.imgp
+    optp = params.optp
+    recp = params.recp
+    
+    #first make sure noise level is nonzero, optimize alpha is true, and xtol_rel is zero
+    if imgp.noise_level == 0
+        error("noise level is zero; change noise to nonzero")
+    end
+    if optp.optimize_alpha == false
+        error("optimize_alpha == false; change to true")
+    end
+    if optp.xtol_rel != 0
+        error("xtol_rel is nonzero; change to zero")
+    end
+    
+    opt_id = @sprintf("%s_stochastic_geoms_%s_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", opt_date, optp.geoms_init_type, optp.αinit, optp.maxeval, optp.xtol_rel)
+    directory = @sprintf("ImagingOpt.jl/optdata/%s", opt_id)
+    Base.Filesystem.mkdir( directory )
+    
+    #save input parameters in json file
+    jsonread = JSON3.read(read("$PARAMS_DIR/$pname.json", String))
+    open("$directory/$opt_id.json", "w") do io
+        JSON3.pretty(io, jsonread)
+    end
+
+    #save additional system parameters in json file
+    extra_params = compute_system_params(pp, imgp)
+    extra_params_filename = "$directory/extra_params_$opt_date.json"
+    open(extra_params_filename,"w") do io
+        JSON3.pretty(io, extra_params)
+    end
+    
+    #file for saving objective vals
+    file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"   
+
+    #file for saving alpha vals
+    if optp.optimize_alpha
+        file_save_alpha_vals = "$directory/alpha_vals_$opt_date.csv"   
+    end
+
+    #file for saving conjugate gradient solve iterations
+    file_save_cg_iters = "$directory/cg_iters_$opt_date.txt"
+    open(file_save_cg_iters, "a") do io
+        write(io, "Default maxiter = $(imgp.objL^2); set to maxiter = $(optp.cg_maxiter_factor * imgp.objL^2) \n")
+    end
+
+    surrogates, freqs = prepare_surrogate(pp)
+    Tinit_flat = prepare_reconstruction(recp, imgp)
+
+    plan_nearfar = plan_fft!(zeros(Complex{typeof(freqs[1])}, (2*pp.gridL, 2*pp.gridL)), flags=FFTW.MEASURE)
+    plan_PSF = plan_fft!(zeros(Complex{typeof(freqs[1])}, (imgp.objL + imgp.imgL, imgp.objL + imgp.imgL)), flags=FFTW.MEASURE)
+    weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)
+    
+    geoms_init = prepare_geoms(params)
+    parameters = [geoms_init[:]; optp.α_scaling * optp.αinit]
+
+    function myfunc(parameters::Vector)
+        start = time()
+    
+        Tmaps = prepare_objects(imgp, pp)
+        noises = prepare_noises(imgp)
+        println(noises[1][1])
+        flush(stdout)
+
+        geoms = reshape(parameters[1:end-1], pp.gridL, pp.gridL)
+        α = parameters[end] / optp.α_scaling
+        
+        if parallel == true
+            fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+        else
+            fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+        end
+
+        grad = zeros(typeof(freqs[1]), pp.gridL^2 + 1)
+        objective = convert(typeof(freqs[1]), 0)
+        
+        for obji = 1:imgp.objN
+            Tmap = Tmaps[obji]
+            noise = noises[obji]
+            B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+            
+            image_Tmap_grid = make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel);
+            Test_flat = reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
+            
+            objective = objective +  (1/imgp.objN) * ( (Tmap[:] - Test_flat)'*(Tmap[:] - Test_flat) ) / (Tmap[:]' * Tmap[:])
+
+            grad_obji, num_cg_iters = dloss_dparams(pp, imgp, optp, recp, geoms, α, Tmap, B_Tmap_grid, Test_flat, image_Tmap_grid, noise, fftPSFs, surrogates, freqs, plan_nearfar, plan_PSF, weights, parallel)
+            open(file_save_cg_iters, "a") do io
+                writedlm(io, num_cg_iters, ',')
+            end
+        
+            grad[1:end] = grad[1:end] + (1/imgp.objN) * grad_obji
+        
+        end
+        elapsed = time() - start
+    
+        #save objective val
+        open(file_save_objective_vals, "a") do io
+            writedlm(io, objective, ',')
+        end
+
+        #save alpha val
+        open(file_save_alpha_vals, "a") do io
+            writedlm(io, α, ',')
+        end
+    
+        println()
+        println(@sprintf("time elapsed = %f",elapsed))
+        flush(stdout)
+        grad
+    end
+
+    opt = Optimisers.ADAM(optp.η)
+    setup = Optimisers.setup(opt, parameters)
+
+    for iter in 1:optp.maxeval
+        grad = myfunc(parameters)
+        setup, parameters = Optimisers.update(setup, parameters, grad)
+        parameters[1:end-1] = (x -> clamp(x, pp.lbwidth, pp.ubwidth)).(parameters[1:end-1])
+        parameters[end] = clamp(parameters[end], 0,Inf)
+    end
+
+    mingeoms = parameters[1:end-1]
+    println("max eval reached")
+    
+    #save output data in json file
+    dict_output = Dict("return_val" => "MAXEVAL_REACHED")
+    output_data_filename = "$directory/output_data_$opt_date.json"
+    open(output_data_filename,"w") do io
+        JSON3.pretty(io, dict_output)
+    end
+    
+    #save optimized metasurface parameters (geoms)
+    geoms_filename = "$directory/geoms_$opt_date.csv"
+    writedlm( geoms_filename,  mingeoms,',')
+
+    opt_id
+end
+
+#TO DO: get rid of eventually
+function run_opt(pname, presicion, parallel, opt_date)
+    if optp.stochastic
+        opt_id = run_stochastic_opt(pname, presicion, parallel, opt_date)
+    else
+        opt_id = run_deterministic_opt(pname, presicion, parallel, opt_date)  
+    end
+    opt_id
+end
 
 function process_opt(presicion, parallel, opt_date, opt_id)
     directory = "ImagingOpt.jl/optdata/$opt_id"
@@ -493,20 +626,26 @@ function process_opt(presicion, parallel, opt_date, opt_id)
     surrogates, freqs = prepare_surrogate(pp)
     Tinit_flat = prepare_reconstruction(recp, imgp)
     
-    #load Tmaps
-    file_save_Tmaps_flat = "$directory/Tmaps_$opt_date.csv"
-    Tmaps = readdlm(file_save_Tmaps_flat,',')
-    Tmaps = [reshape(Tmaps[:,i], imgp.objL,imgp.objL) for i in 1:size(Tmaps)[2]]
-    
-    #load noises
-    file_save_noises_flat = "$directory/noises_$opt_date.csv"
-    noises = readdlm(file_save_noises_flat, ',')
-    noises = [reshape(noises[:,1], imgp.imgL, imgp.imgL) for i in 1:imgp.objN]
+    if optp.stochastic
+        Tmaps = prepare_objects(imgp, pp)
+        noises = prepare_noises(imgp)
+    else
+        #load Tmaps
+        file_save_Tmaps_flat = "$directory/Tmaps_$opt_date.csv"
+        Tmaps = readdlm(file_save_Tmaps_flat,',')
+        Tmaps = [reshape(Tmaps[:,i], imgp.objL,imgp.objL) for i in 1:size(Tmaps)[2]]
+
+        #load noises
+        file_save_noises_flat = "$directory/noises_$opt_date.csv"
+        noises = readdlm(file_save_noises_flat, ',')
+        noises = [reshape(noises[:,1], imgp.imgL, imgp.imgL) for i in 1:imgp.objN]
+    end
     
     plan_nearfar = plan_fft!(zeros(Complex{typeof(freqs[1])}, (2*pp.gridL, 2*pp.gridL)), flags=FFTW.MEASURE)
     plan_PSF = plan_fft!(zeros(Complex{typeof(freqs[1])}, (imgp.objL + imgp.imgL, imgp.objL + imgp.imgL)), flags=FFTW.MEASURE)
     weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)
     
+    #TO DO: if starting from random metasurface, save and then reload geoms here
     geoms_init = prepare_geoms(params)
     
     #save initial reconstruction
