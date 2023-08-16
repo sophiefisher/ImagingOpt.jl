@@ -46,7 +46,7 @@ function ChainRulesCore.rrule(config::RuleConfig{>:HasReverseMode}, ::typeof(Thr
 end
 
 
-# Implementations of differentiable functions that form optimization pipeline
+# Implementations of differentiable functions that form optimization pipeline and their derivatives
 function nearfield(incident, surrogate, geoms, parallel)
     if parallel == true
         #near = incident .* ThreadsX.map(surrogate,geoms, basesize = div(length(geoms), 2) )
@@ -538,7 +538,39 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
     end
     
     term1 + term2 + term3
-
     
 end
     
+    
+function dloss_dparams(pp, imgp, optp, recp, geoms, α, Tmap, B_Tmap_grid, Test_flat, image_Tmap_grid, noise, fftPSFs, surrogates, freqs, plan_nearfar, plan_PSF, weights, parallel)
+    if optp.optimize_alpha
+        grad = Vector{Float64}(undef,pp.gridL^2 + 1) 
+    else
+        grad = Vector{Float64}(undef,pp.gridL^2 )
+    end
+        
+    term1plusterm2_hessian = term1plusterm2_hes(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, parallel);
+    H = Hes(pp.orderfreq + 1, pp.wavcen, imgp.objL, imgp.imgL, term1plusterm2_hessian, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, pp.blackbody_scaling, parallel)
+    b = 2 * (Tmap[:] - Test_flat) / (Tmap[:]' * Tmap[:])
+
+    lambda = zeros(typeof(freqs[1]), imgp.objL^2)
+    lambda, ch = cg!(lambda, H, b, log=true, maxiter = optp.cg_maxiter_factor * imgp.objL^2);
+    println(ch)
+    flush(stdout)
+        
+    jacobian_vp = jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, B_Tmap_grid, noise, fftPSFs, parallel)[:]
+        
+    if optp.optimize_alpha
+        grad[1:end-1] = jacobian_vp
+        grad[end] = 2 * (1/optp.α_scaling) * (lambda' * (Test_flat .- recp.subtract_reg ) )
+    else
+        grad[1:end] = jacobian_vp
+    end
+    grad, length(ch[:resnorm])
+end
+    
+#open(file_save_cg_iters, "a") do io
+#    writedlm(io, length(ch[:resnorm]), ',')
+#end
+    
+#(1/imgp.objN)

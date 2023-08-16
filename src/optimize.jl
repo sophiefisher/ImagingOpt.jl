@@ -386,7 +386,7 @@ function run_opt(pname, presicion, parallel, opt_date)
             
             objective = objective +  (1/imgp.objN) * ( (Tmap[:] - Test_flat)'*(Tmap[:] - Test_flat) ) / (Tmap[:]' * Tmap[:])
 
-            term1plusterm2_hessian = term1plusterm2_hes(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, parallel);
+            #=term1plusterm2_hessian = term1plusterm2_hes(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, parallel);
             H = Hes(pp.orderfreq + 1, pp.wavcen, imgp.objL, imgp.imgL, term1plusterm2_hessian, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, pp.blackbody_scaling, parallel)
             b = 2 * (Tmap[:] - Test_flat) / (Tmap[:]' * Tmap[:])
 
@@ -405,7 +405,17 @@ function run_opt(pname, presicion, parallel, opt_date)
                 else
                     grad[1:end] = grad[1:end] + ( (1/imgp.objN) * jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, B_Tmap_grid, noise, fftPSFs, parallel)[:] )
                 end
+            end=#
+            
+            grad_obji, num_cg_iters = dloss_dparams(pp, imgp, optp, recp, geoms, α, Tmap, B_Tmap_grid, Test_flat, image_Tmap_grid, noise, fftPSFs, surrogates, freqs, plan_nearfar, plan_PSF, weights, parallel)
+            open(file_save_cg_iters, "a") do io
+                writedlm(io, num_cg_iters, ',')
             end
+        
+            if length(grad) > 0
+                grad[1:end] = grad[1:end] + (1/imgp.objN) * grad_obji
+            end
+        
         end
         elapsed = time() - start
     
@@ -423,8 +433,6 @@ function run_opt(pname, presicion, parallel, opt_date)
     
         println()
         println(@sprintf("time elapsed = %f",elapsed))
-        println(@sprintf("OBJECTIVE VAL IS %.12f",objective) )
-        println()
         flush(stdout)
         objective
     end

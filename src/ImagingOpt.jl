@@ -4,7 +4,7 @@ module ImagingOpt
     export prepare_incident, prepare_n2f_kernel, prepare_objects, prepare_geoms, prepare_blackbody, permittivity, prepare_surrogate, prepare_reconstruction, prepare_noises
     export G, Gtranspose
     export nearfield, geoms_to_far, far_to_PSFs, PSFs_to_fftPSFs, get_fftPSF, get_PSF, make_image, reconstruct_object, reconstruction_objective, reconstruction_objective_simplified, gradient_reconstruction_T, gradient_reconstruction_T_autodiff,  get_image_diff_flat, dB_dT, d2B_dT2
-    export Hes, term1plusterm2_hes, build_hessian, jacobian_vp_undiff, jacobian_vp_autodiff, jacobian_vp_manual
+    export Hes, term1plusterm2_hes, build_hessian, jacobian_vp_undiff, jacobian_vp_autodiff, jacobian_vp_manual, dloss_dparams
     export arrarr_to_multi
     export get_params, get_α, compute_system_params, run_opt, process_opt, design_singlefreq_lens
 
