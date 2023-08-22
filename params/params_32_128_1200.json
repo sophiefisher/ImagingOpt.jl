@@ -4,9 +4,9 @@
         "ubλ_μm":12,
         "orderλ":20,
         
-        "F_μm": 7000,
+        "F_μm": 12000,
         "depth_μm":200000,
-        "gridL": 700,
+        "gridL": 1200,
         
         "cellL_μm":4,
         "lbwidth_μm":1.8,
@@ -29,7 +29,7 @@
  
     "imgp": {
         "objL": 32,
-        "imgL": 64,
+        "imgL": 128,
         "binL": 7,
         "objN": 3,
         "object_type": "random",
@@ -43,14 +43,16 @@
         
     },
     "optp": {
-        "geoms_init_type":"uniform",
-        "geoms_init_loadfilename":"minimax_geoms_LD_MMA_2_inair=False_1.00e-06_500.csv",
-        "αinit":1e-2,
-        "α_scaling":1e2,
+        "geoms_init_type":"load",
+        "geoms_init_loadfilename":"geoms_singlefreq_lens_2023-07-31T22_31_46.689.csv",
+        "αinit":1,
+        "α_scaling":1,
         "maxeval":1000,
         "xtol_rel":0,
         "cg_maxiter_factor":4,
-        "optimize_alpha":true
+        "optimize_alpha":true,
+        "stochastic":true,
+        "η": 1e-3
         
     },
     "recp": {
