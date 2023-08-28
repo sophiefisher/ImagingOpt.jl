@@ -306,9 +306,9 @@ function run_opt(pname, presicion, parallel, opt_date)
     end
     
     if optp.stochastic
-        opt_id = @sprintf("%s_%d_%d_%d_stochastic_geoms_%s_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", opt_date, imgp.objL, imgp.imgL, pp.gridL, optp.geoms_init_type, optp.αinit, optp.maxeval, optp.xtol_rel)
+        opt_id = @sprintf("%s_stochastic_geoms_%s_%d_%d_%d_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, optp.αinit, optp.maxeval, optp.xtol_rel)
     else
-        opt_id = @sprintf("%s_%d_%d_%d_geoms_%s_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", opt_date, imgp.objL, imgp.imgL, pp.gridL, optp.geoms_init_type, optp.αinit, optp.maxeval, optp.xtol_rel)
+        opt_id = @sprintf("%s_geoms_%s_%d_%d_%d_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, optp.αinit, optp.maxeval, optp.xtol_rel)
     end
     
     directory = @sprintf("ImagingOpt.jl/optdata/%s", opt_id)
