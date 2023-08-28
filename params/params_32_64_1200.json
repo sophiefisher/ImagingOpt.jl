@@ -29,7 +29,7 @@
  
     "imgp": {
         "objL": 32,
-        "imgL": 128,
+        "imgL": 64,
         "binL": 7,
         "objN": 3,
         "object_type": "random",
