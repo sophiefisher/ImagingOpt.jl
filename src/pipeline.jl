@@ -48,7 +48,7 @@ end
 
 # Implementations of differentiable functions that form optimization pipeline and their derivatives
 function nearfield(incident, surrogate, geoms, parallel)
-    if parallel == true
+    if parallel
         #near = incident .* ThreadsX.map(surrogate,geoms, basesize = div(length(geoms), 2) )
         near = incident .* ThreadsX.map(surrogate,geoms)
     else
@@ -59,7 +59,7 @@ end
 
 
 function ChainRulesCore.rrule(::typeof(nearfield), incident, surrogate, geoms, parallel)
-    if parallel==true
+    if parallel
         out = ThreadsX.map(incident, geoms) do i,g 
             s, sderiv = chebgradient(surrogate,g)
             s * i, sderiv * i
@@ -83,10 +83,10 @@ function geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar::FFTW
 end
 
 function far_to_PSF(far, psfL, binL, scaling, freq)
-    gridL, _ = size(far)
-    cropL = (gridL - psfL * binL) ÷ 2 # require binL * (objL + imgL) <= gridL
-    farcrop = far[cropL + 1:gridL - cropL, cropL + 1:gridL - cropL];
-    farcropbin = reshape(farcrop, (binL, psfL, binL, psfL))
+    #gridL, _ = size(far)
+    #cropL = (gridL - psfL * binL) ÷ 2 # require binL * (objL + imgL) <= gridL
+    #farcrop = far[cropL + 1:gridL - cropL, cropL + 1:gridL - cropL];
+    farcropbin = reshape(far, (binL, psfL, binL, psfL))
     farcropbinmag = (abs.(farcropbin)).^2
     PSFbin = sum(farcropbinmag, dims=(1, 3))
     #multiply PSFs by arbitrary scaling factor and divide by freqency to get photon count
@@ -100,7 +100,7 @@ end
 
 function get_PSF(freq, surrogate, pp, imgp, geoms, plan_nearfar, parallel)
     incident =  ChainRulesCore.ignore_derivatives( ()-> prepare_incident(pp,freq) ) 
-    n2f_kernel =  ChainRulesCore.ignore_derivatives( ()-> prepare_n2f_kernel(pp,freq, plan_nearfar) )
+    n2f_kernel =  ChainRulesCore.ignore_derivatives( ()-> prepare_n2f_kernel(pp,imgp,freq, plan_nearfar) )
     far = geoms_to_far(geoms, surrogate, incident, n2f_kernel, plan_nearfar, parallel)
     PSF = far_to_PSF(far, imgp.objL + imgp.imgL, imgp.binL, pp.PSF_scaling, freq)
 end
@@ -128,14 +128,14 @@ function make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_
         y_temp = reshape(y_temp, (imgp.imgL,imgp.imgL))
     end
     
-    if parallel == true
+    if parallel
         image_Tmap_grid_noiseless = ThreadsX.sum(iF->image_Tmap_grid_noiseless_iF(iF), 1:nF)
     else
         image_Tmap_grid_noiseless = sum(iF->image_Tmap_grid_noiseless_iF(iF), 1:nF)
     end
     
     #add nosie 
-    if imgp.noise_abs == true
+    if imgp.noise_abs
         image_Tmap_grid = abs.(image_Tmap_grid_noiseless .+ mean(image_Tmap_grid_noiseless)* imgp.noise_level .*randn.(floattype) )
     else
         image_Tmap_grid = image_Tmap_grid_noiseless .+ mean(image_Tmap_grid_noiseless)*noise
@@ -149,7 +149,7 @@ function get_image_diff_flat(Test_flat, image_Tmap_flat, pp, imgp, fftPSFs, freq
     Test_grid = reshape(Test_flat, imgp.objL, imgp.objL)
     B_Test_grid = prepare_blackbody(Test_grid, freqs, imgp, pp)
     
-    if parallel == true
+    if parallel
         image_Test_flat  = ThreadsX.sum(iF->G(B_Test_grid[:,:,iF], fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
     else
         image_Test_flat  = sum(iF->G(B_Test_grid[:,:,iF], fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
@@ -201,7 +201,7 @@ function gradient_reconstruction_T(Test_flat, image_diff_flat, α, pp, imgp, rec
         dB_dT_diag * temp_term2
     end
     
-    if parallel == true
+    if parallel
         term2  = ThreadsX.sum(iF->term2(iF), 1:nF)
     else
         term2  = sum(iF->term2(iF), 1:nF)
@@ -289,7 +289,7 @@ function term1plusterm2_hes(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfa
     
     term1hes = I*2*α
     
-    if parallel == true
+    if parallel
         image_Test_flat  = ThreadsX.sum(iF->G(B_Test_grid[:,:,iF], fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
     else
         image_Test_flat  = sum(iF->G(B_Test_grid[:,:,iF], fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
@@ -302,7 +302,7 @@ function term1plusterm2_hes(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfa
         Diagonal( d2B_dT2.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) .* Gtranspose(image_diff_grid, fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF) )
     end
     
-    if parallel == true
+    if parallel
         term2hes = -2 * ThreadsX.sum(iF->term2hes_iF(iF), 1:nF)
     else
         term2hes = -2 * sum(iF->term2hes_iF(iF), 1:nF)
@@ -336,7 +336,7 @@ function LinearMaps._unsafe_mul!(vectorout::AbstractVecOrMat, H::Hes, vectorin::
         G( reshape(out, H.objL, H.objL), H.fftPSFs[iF], H.weights[iF], H.freqs[1], H.freqs[end], H.plan_PSF)
     end
     
-    if H.parallel == true
+    if H.parallel
         term3_rhs  = ThreadsX.sum(iF->term3_rhs_iF(iF), 1:H.nF)
     else
         term3_rhs  = sum(iF->term3_rhs_iF(iF), 1:H.nF)
@@ -348,7 +348,7 @@ function LinearMaps._unsafe_mul!(vectorout::AbstractVecOrMat, H::Hes, vectorin::
          (Diagonal([dB_dT(i, H.freqs[iF], H.wavcen, H.blackbody_scaling) for i in H.Test_flat]) * out )
     end
     
-    if H.parallel == true
+    if H.parallel
         vectorout .= 2 * ThreadsX.sum(iF->term3_iF(iF), 1:H.nF)
     else
         vectorout .= 2 * sum(iF->term3_iF(iF), 1:H.nF)
@@ -375,7 +375,7 @@ function build_hessian(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfar, pl
         term3rhs_temp
     end
         
-    if parallel == true
+    if parallel
         term3rhs =  ThreadsX.sum(iF->term3rhs_iF(iF), 1:nF)
     else
         term3rhs = sum(iF->term3rhs_iF(iF), 1:nF)
@@ -399,7 +399,7 @@ function jacobian_vp_undiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
     Test_grid = reshape(Test_flat, imgp.objL, imgp.objL)
     B_Test_grid = prepare_blackbody(Test_grid, freqs, imgp, pp)
     
-    if parallel == true
+    if parallel
         image_Test_flat  = ThreadsX.sum(iF->G(B_Test_grid[:,:,iF], fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
     else
         image_Test_flat  = sum(iF->G(B_Test_grid[:,:,iF], fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
@@ -410,7 +410,7 @@ function jacobian_vp_undiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
         -2 * lambda' * Diagonal(  dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) ) * Gtranspose( image_diff_grid,  fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF)
     end
     
-    if parallel == true
+    if parallel
         jvp_undiff  = ThreadsX.sum(iF->term2_iF(iF), 1:nF)
     else
         jvp_undiff  = sum(iF->term2_iF(iF), 1:nF)
@@ -433,20 +433,24 @@ function uvector_dot_Gtransposedg_vvector(pp, imgp, freq, surrogate, incident, n
         
     temp1 = plan_PSF * [reshape(uflat, imgp.objL, imgp.objL) zeros(typeof(freq),  imgp.objL, imgp.imgL); zeros(typeof(freq), imgp.imgL, imgp.objL + imgp.imgL) ]
     temp2 = plan_PSF \ [zeros(typeof(freq), imgp.objL, imgp.objL + imgp.imgL); zeros(typeof(freq), imgp.imgL, imgp.objL) vgrid]
-    
     xvector = real.( plan_PSF * (temp1 .* temp2) .* weight .* (freqend - freq1) )[:]
     #dmean = (xvector * (psfL^2) / (sum(PSF_nomean)) ) .- ( (psfL^2) * (xvector' * PSF_nomean) / ( sum(PSF_nomean) )^2 )
     
-    dmeantemp = repeat(reshape(xvector, psfL, psfL), inner=(imgp.binL,imgp.binL))
+    dbinPSF = repeat(reshape(xvector, psfL, psfL), inner=(imgp.binL,imgp.binL))
             
-    dim = (pp.gridL - (psfL * imgp.binL) ) ÷ 2 
-    dfarcrop = [zeros(typeof(freq), dim, pp.gridL); zeros(typeof(freq), (psfL * imgp.binL) , dim) dmeantemp zeros(typeof(freq), (psfL * imgp.binL) , dim); zeros(typeof(freq), dim, pp.gridL) ][:]
+    #dim = (pp.gridL - (psfL * imgp.binL) ) ÷ 2 
+    #dfarcrop = [zeros(typeof(freq), dim, pp.gridL); zeros(typeof(freq), (psfL * imgp.binL) , dim) dmeantemp zeros(typeof(freq), (psfL * imgp.binL) , dim); zeros(typeof(freq), dim, pp.gridL) ][:]
     
-    objective_out = pp.PSF_scaling .* conj.(far)[:] ./ freq
-    zeropadded = plan_nearfar \ [zeros(typeof(freq), pp.gridL, 2*pp.gridL); zeros(typeof(freq), pp.gridL, pp.gridL) reshape(dfarcrop .* objective_out,pp.gridL, pp.gridL) ]
+    objective_out = pp.PSF_scaling .* conj.(far) ./ freq
+    n2f_size = pp.gridL + imgp.binL*psfL    
+    zeropadded = plan_nearfar \ [zeros(typeof(freq), pp.gridL, n2f_size); zeros(typeof(freq), imgp.binL*psfL, pp.gridL) dbinPSF .* objective_out ]
      
     dsur_dg_function(geom) =  chebgradient(surrogate, geom)[2]
-    dsur_dg = ThreadsX.map(dsur_dg_function, geoms)
+    if parallel
+        dsur_dg = ThreadsX.map(dsur_dg_function, geoms)
+    else
+        dsur_dg = map(dsur_dg_function, geoms)
+    end
             
      2*real( dsur_dg .* incident .* (plan_nearfar * (zeropadded .* n2f_kernel))[1:pp.gridL, 1:pp.gridL] );
 
@@ -461,7 +465,7 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
     Test_grid = reshape(Test_flat, imgp.objL, imgp.objL)
     B_Test_grid = prepare_blackbody(Test_grid, freqs, imgp, pp)
     
-    if parallel == true
+    if parallel
         image_Test_flat  = ThreadsX.sum(iF->G(B_Test_grid[:,:,iF], fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
     else
         image_Test_flat  = sum(iF->G(B_Test_grid[:,:,iF], fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
@@ -474,19 +478,19 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
         weight = weights[iF]
         surrogate = surrogates[iF]
         incident = prepare_incident(pp,freq)  
-        n2f_kernel = prepare_n2f_kernel(pp,freq, plan_nearfar);
+        n2f_kernel = prepare_n2f_kernel(pp,imgp,freq, plan_nearfar);
         uvector = (-2 * lambda .* dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) ) 
         uvector_dot_Gtransposedg_vvector(pp, imgp, freq, surrogate, incident, n2f_kernel, geoms, weight, freqend, freq1, uvector, image_diff_grid, plan_nearfar, plan_PSF, parallel)
     end
             
-    if parallel == true
+    if parallel
         term1  = ThreadsX.sum(iF->term1_iF(iF), 1:nF)
     else
         term1  = sum(iF->term1_iF(iF), 1:nF)
     end      
     
         
-    if parallel == true
+    if parallel
         vgrid2  = ThreadsX.sum(iF->G( reshape(dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) .* lambda , imgp.objL, imgp.objL)  , fftPSFs[iF], weights[iF], freqs[1], freqs[end], plan_PSF), 1:nF)
     else
         vgrid2  = sum(iF->G(reshape(dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) .* lambda , imgp.objL, imgp.objL), fftPSFs[iF], weights[iF], freq1, freqend, plan_PSF), 1:nF)
@@ -500,12 +504,12 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
         weight = weights[iF]
         surrogate = surrogates[iF]
         incident = prepare_incident(pp,freq)  
-        n2f_kernel = prepare_n2f_kernel(pp,freq, plan_nearfar);
+        n2f_kernel = prepare_n2f_kernel(pp,imgp,freq, plan_nearfar);
         uvector = -2*( B_Tmap_grid[:,:,iF]  -  B_Test_grid[:,:,iF])[:]
         uvector_dot_Gtransposedg_vvector(pp, imgp, freq, surrogate, incident, n2f_kernel, geoms, weight, freqend, freq1, uvector, vgrid2, plan_nearfar, plan_PSF, parallel)
     end
             
-    if parallel == true
+    if parallel
         term2  = ThreadsX.sum(iF->term2_iF(iF), 1:nF)
     else
         term2  = sum(iF->term2_iF(iF), 1:nF)
@@ -515,7 +519,7 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
         (-2 / imgp.imgL^2 ) * lambda' * (dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) .* Gtranspose(noise, fftPSFs[iF], weights[iF], freq1, freqend, plan_PSF) )
     end
     
-    if parallel == true
+    if parallel
         term3constant  = ThreadsX.sum(iF->term3constant_iF(iF), 1:nF)
     else
         term3constant  = sum(iF->term3constant_iF(iF), 1:nF)
@@ -527,11 +531,11 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, surrogates, freqs, Test_fl
         weight = weights[iF]
         surrogate = surrogates[iF]
         incident = prepare_incident(pp,freq)  
-        n2f_kernel = prepare_n2f_kernel(pp,freq, plan_nearfar);
+        n2f_kernel = prepare_n2f_kernel(pp,imgp,freq, plan_nearfar);
         uvector_dot_Gtransposedg_vvector(pp, imgp, freq, surrogate, incident, n2f_kernel, geoms, weight, freqend, freq1, B_Tmap_grid[:,:,iF], ones(imgp.imgL, imgp.imgL), plan_nearfar, plan_PSF, parallel)
     end
         
-    if parallel == true
+    if parallel
         term3  = term3constant * ThreadsX.sum(iF->term3_iF(iF), 1:nF)
     else
         term3  = term3constant  * sum(iF->term3_iF(iF), 1:nF)

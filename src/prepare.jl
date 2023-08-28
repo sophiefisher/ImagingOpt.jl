@@ -119,8 +119,9 @@ function prepare_incident(pp::PhysicsParams,freq::AbstractFloat)
     incident
 end
 
-function prepare_n2f_kernel(pp::PhysicsParams,freq::AbstractFloat, plan_nearfar::FFTW.cFFTWPlan)
-    n2f_kernel = plan_nearfar * greens(pp.F, freq, convert(typeof(freq),1), convert(typeof(freq),1), pp.gridL, pp.cellL)
+function prepare_n2f_kernel(pp::PhysicsParams,imgp::ImagingParams,freq::AbstractFloat, plan_nearfar::FFTW.cFFTWPlan)
+    n2f_size = pp.gridL + imgp.binL*(imgp.objL + imgp.imgL)
+    n2f_kernel = plan_nearfar * greens(pp.F, freq, 1,1, n2f_size, pp.cellL)
 end
 
 function prepare_surrogate(pp::PhysicsParams)
@@ -219,3 +220,12 @@ end
 function prepare_noises(imgp::ImagingParams)
     noises = [imgp.noise_level .* randn(imgp.imgL, imgp.imgL) for i in 1:imgp.objN]
 end
+
+function prepare_fft_plans(pp::PhysicsParams, imgp::ImagingParams)
+    n2f_size = pp.gridL + imgp.binL*(imgp.objL + imgp.imgL)
+    plan_nearfar = plan_fft!(zeros(Complex{typeof(pp.lbfreq)}, (n2f_size, n2f_size)), flags=FFTW.MEASURE)
+    plan_PSF = plan_fft!(zeros(Complex{typeof(pp.lbfreq)}, (imgp.objL + imgp.imgL, imgp.objL + imgp.imgL)), flags=FFTW.MEASURE)
+
+    plan_nearfar, plan_PSF
+end
+    
