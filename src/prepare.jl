@@ -122,6 +122,7 @@ end
 function prepare_n2f_kernel(pp::PhysicsParams,imgp::ImagingParams,freq::AbstractFloat, plan_nearfar::FFTW.cFFTWPlan)
     n2f_size = pp.gridL + imgp.binL*(imgp.objL + imgp.imgL)
     n2f_kernel = plan_nearfar * greens(pp.F, freq, 1,1, n2f_size, pp.cellL)
+    
 end
 
 function prepare_surrogate(pp::PhysicsParams)
