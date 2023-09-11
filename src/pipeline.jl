@@ -282,6 +282,8 @@ function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, r
     minT
 end
 
+
+    
 function term1plusterm2_hes(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, parallel)
     nF = pp.orderfreq + 1
     Test_grid = reshape(Test_flat, imgp.objL, imgp.objL)
