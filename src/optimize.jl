@@ -308,12 +308,10 @@ function run_opt(pname, presicion, parallel, opt_date)
     #prepare physics
     surrogates, freqs = prepare_surrogate(pp)
     Tinit_flat = prepare_reconstruction(recp, imgp)
-    
     plan_nearfar, plan_PSF = prepare_fft_plans(pp, imgp)
-
     weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)
-    
     geoms_init = prepare_geoms(params)
+    
     if optp.optimize_alpha
         parameters = [geoms_init[:]; optp.α_scaling * optp.αinit]
     else
