@@ -267,7 +267,7 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     savefig("$directory/geoms_singlefreq_lens_$opt_date.png")
 
     #plot PSFs (make sure there are only 21 of them)
-    if parallel == true
+    if parallel
         PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
     else
         PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
@@ -297,14 +297,46 @@ function run_opt(pname, presicion, parallel, opt_date)
         if imgp.noise_level == 0
             error("noise level is zero; change noise to nonzero")
         end
-        if optp.optimize_alpha == false
-            error("optimize_alpha == false; change to true")
+        if ! optp.optimize_alpha 
+            error("optimize_alpha is set to false; change to true")
         end
         if optp.xtol_rel != 0
             error("xtol_rel is nonzero; change to zero")
         end
     end
     
+    #prepare physics
+    surrogates, freqs = prepare_surrogate(pp)
+    Tinit_flat = prepare_reconstruction(recp, imgp)
+    
+    plan_nearfar, plan_PSF = prepare_fft_plans(pp, imgp)
+
+    weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)
+    
+    geoms_init = prepare_geoms(params)
+    if optp.optimize_alpha
+        parameters = [geoms_init[:]; optp.α_scaling * optp.αinit]
+    else
+        parameters = geoms_init[:]
+    end
+    
+    #if not doing stochastic opt, generate Tmaps and noises and save them in files
+    if ! optp.stochastic
+        Tmaps = prepare_objects(imgp, pp)
+        noises = prepare_noises(imgp)
+
+        #save Tmaps
+        Tmaps_flat = reduce(hcat, [Tmaps[i][:] for i in 1:length(Tmaps)])
+        file_save_Tmaps_flat = "$directory/Tmaps_$opt_date.csv"
+        writedlm( file_save_Tmaps_flat,  Tmaps_flat,',')
+
+        #save noises
+        noises_flat = reduce(hcat, [noises[i][:] for i in 1:imgp.objN])
+        file_save_noises_flat = "$directory/noises_$opt_date.csv"
+        writedlm( file_save_noises_flat,  noises_flat,',')
+    end
+    
+    #prepare opt files
     if optp.stochastic
         opt_id = @sprintf("%s_stochastic_geoms_%s_%d_%d_%d_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, optp.αinit, optp.maxeval, optp.xtol_rel)
     else
@@ -340,36 +372,6 @@ function run_opt(pname, presicion, parallel, opt_date)
     open(file_save_cg_iters, "a") do io
         write(io, "Default maxiter = $(imgp.objL^2); set to maxiter = $(optp.cg_maxiter_factor * imgp.objL^2) \n")
     end
-    
-    surrogates, freqs = prepare_surrogate(pp)
-    Tinit_flat = prepare_reconstruction(recp, imgp)
-    
-    #if not doing stochastic opt, generate Tmaps and noises and save them in files
-    if ! optp.stochastic
-        Tmaps = prepare_objects(imgp, pp)
-        noises = prepare_noises(imgp)
-
-        #save Tmaps
-        Tmaps_flat = reduce(hcat, [Tmaps[i][:] for i in 1:length(Tmaps)])
-        file_save_Tmaps_flat = "$directory/Tmaps_$opt_date.csv"
-        writedlm( file_save_Tmaps_flat,  Tmaps_flat,',')
-
-        #save noises
-        noises_flat = reduce(hcat, [noises[i][:] for i in 1:imgp.objN])
-        file_save_noises_flat = "$directory/noises_$opt_date.csv"
-        writedlm( file_save_noises_flat,  noises_flat,',')
-    end
-
-    plan_nearfar, plan_PSF = prepare_fft_plans(pp, imgp)
-
-    weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)
-    
-    geoms_init = prepare_geoms(params)
-    if optp.optimize_alpha
-        parameters = [geoms_init[:]; optp.α_scaling * optp.αinit]
-    else
-        parameters = geoms_init[:]
-    end
 
 
     function compute_obj_and_grad(parameters)
@@ -387,13 +389,17 @@ function run_opt(pname, presicion, parallel, opt_date)
             geoms = reshape(parameters, pp.gridL, pp.gridL)
             α = optp.αinit
         end
-        
-        if parallel == true
-            fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
-        else
-            fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
-        end
+    
+        if parallel
+            far_fields = ThreadsX.map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+            fftPSFs = ThreadsX.map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
+            dsur_dg_times_incidents = ThreadsX.map(iF->get_dsur_dg_times_incident(pp, freqs[iF], surrogates[iF], geoms, parallel),1:pp.orderfreq+1)
 
+        else
+            far_fields = map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+            fftPSFs = map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
+            dsur_dg_times_incidents = map(iF->get_dsur_dg_times_incident(pp, freqs[iF], surrogates[iF], geoms, parallel),1:pp.orderfreq+1)
+        end
         
         objective = convert(typeof(freqs[1]), 0)
     
@@ -409,12 +415,14 @@ function run_opt(pname, presicion, parallel, opt_date)
             B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
             
             image_Tmap_grid = make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel);
+            #TO DO: save reconstruction data in csv (save data from one optimization iter in one row): return value and # of iterations
             Test_flat = reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
             
             MSE = sum((Tmap[:] .- Test_flat).^2) / sum(Tmap.^2)
             objective = objective +  (1/imgp.objN) * MSE
             
-            grad_obji, num_cg_iters = dloss_dparams(pp, imgp, optp, recp, geoms, α, Tmap, B_Tmap_grid, Test_flat, image_Tmap_grid, noise, fftPSFs, surrogates, freqs, plan_nearfar, plan_PSF, weights, parallel)
+            grad_obji, num_cg_iters = dloss_dparams(pp, imgp, optp, recp, geoms, α, Tmap, B_Tmap_grid, Test_flat, image_Tmap_grid, noise, fftPSFs, dsur_dg_times_incidents, far_fields, freqs, plan_nearfar, plan_PSF, weights, parallel)
+
             open(file_save_cg_iters, "a") do io
                 writedlm(io, num_cg_iters, ',')
             end
@@ -443,15 +451,11 @@ function run_opt(pname, presicion, parallel, opt_date)
     end
     
     if optp.stochastic
-        function myfunc(parameters::Vector)
-            _, grad = compute_obj_and_grad(parameters)
-            grad
-        end
         opt = Optimisers.ADAM(optp.η)
         setup = Optimisers.setup(opt, parameters)
 
         for iter in 1:optp.maxeval
-            grad = myfunc(parameters)
+            _, grad = compute_obj_and_grad(parameters)
             setup, parameters = Optimisers.update(setup, parameters, grad)
             parameters[1:end-1] = (x -> clamp(x, pp.lbwidth, pp.ubwidth)).(parameters[1:end-1])
             parameters[end] = clamp(parameters[end], 0,Inf)
@@ -461,7 +465,6 @@ function run_opt(pname, presicion, parallel, opt_date)
         println("MAX EVAL REACHED")
         dict_output = Dict("return_val" => "MAXEVAL_REACHED")
     else
-        println("hi")
         function myfunc2(parameters::Vector, grad::Vector)
             objective, grad_temp = compute_obj_and_grad(parameters)
             if length(grad) > 0
@@ -547,7 +550,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     
     #save initial reconstruction
     iqi = SSIM(KernelFactors.gaussian(1.5, 11), (1,1,1)) #standard parameters for SSIM
-    if parallel == true
+    if parallel
         fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
     else
         fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
@@ -589,7 +592,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     savefig("$directory/reconstruction_initial_$opt_date.png")
     
     #plot PSFs (make sure there are only 21 of them)
-    if parallel == true
+    if parallel
         PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, parallel),1:pp.orderfreq+1)
     else
         PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, parallel),1:pp.orderfreq+1)
@@ -668,7 +671,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
 
 
     #save optimized reconstructions and images
-    if parallel == true
+    if parallel
         fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
     else
         fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
@@ -735,7 +738,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     savefig("$directory/objective_vals_$opt_date.png")
 
     #plot PSFs (make sure there are only 21 of them)
-    if parallel == true
+    if parallel
         PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
     else
         PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)

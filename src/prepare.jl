@@ -183,7 +183,7 @@ function prepare_objects(imgp::ImagingParams, pp::PhysicsParams)
         elseif imgp.objN != 1
             error("imgp.objN not equal to one")
         else
-            return Tmap
+            return [Tmap,]
         end
     end
 end
