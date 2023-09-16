@@ -410,7 +410,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     setup = Optimisers.setup(opt, params_opt)
 
     for iter in 1:optp.maxeval
-        objective, grad, num_cg_iters_list = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel)
+        @time objective, grad, num_cg_iters_list = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel)
         
         #save objective val
         open(file_save_objective_vals, "a") do io
