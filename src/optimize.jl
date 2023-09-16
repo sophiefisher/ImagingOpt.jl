@@ -283,26 +283,84 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     savefig("$directory/PSFs_$opt_date.png")
 end
 
+
+function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel)
+    pp = params_init.pp
+    imgp = params_init.imgp
+    optp = params_init.optp
+    recp = params_init.recp
+    
+    Tmaps = prepare_objects(imgp, pp)
+    noises = prepare_noises(imgp)
+
+    if optp.optimize_alpha
+        geoms = reshape(params_opt[1:end-1], pp.gridL, pp.gridL)
+        α = params_opt[end] / optp.α_scaling
+    else
+        geoms = reshape(params_opt, pp.gridL, pp.gridL)
+        α = optp.αinit
+    end
+
+    if parallel
+        far_fields = ThreadsX.map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+        fftPSFs = ThreadsX.map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
+        dsur_dg_times_incidents = ThreadsX.map(iF->get_dsur_dg_times_incident(pp, freqs[iF], surrogates[iF], geoms, parallel),1:pp.orderfreq+1)
+
+    else
+        far_fields = map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+        fftPSFs = map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
+        dsur_dg_times_incidents = map(iF->get_dsur_dg_times_incident(pp, freqs[iF], surrogates[iF], geoms, parallel),1:pp.orderfreq+1)
+    end
+
+    objective = convert(typeof(freqs[1]), 0)
+    if optp.optimize_alpha
+        grad = zeros(typeof(freqs[1]), pp.gridL^2 + 1)
+    else
+        grad = zeros(typeof(freqs[1]), pp.gridL^2)
+    end
+
+    for obji = 1:imgp.objN
+        Tmap = Tmaps[obji]
+        noise = noises[obji]
+        B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+
+        image_Tmap_grid = make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel);
+        #TO DO: save reconstruction data in csv (save data from one optimization iter in one row): return value and # of iterations
+        Test_flat = reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
+
+        MSE = sum((Tmap[:] .- Test_flat).^2) / sum(Tmap.^2)
+        objective = objective +  (1/imgp.objN) * MSE
+
+        grad_obji, num_cg_iters = dloss_dparams(pp, imgp, optp, recp, geoms, α, Tmap, B_Tmap_grid, Test_flat, image_Tmap_grid, noise, fftPSFs, dsur_dg_times_incidents, far_fields, freqs, plan_nearfar, plan_PSF, weights, parallel)
+
+        open(file_save_cg_iters, "a") do io
+            writedlm(io, num_cg_iters, ',')
+        end
+
+        grad = grad + (1/imgp.objN) * grad_obji
+    end
+    objective, grad
+end
+
+
 function run_opt(pname, presicion, parallel, opt_date)
-    params = get_params(pname, presicion)
+    params_init = get_params(pname, presicion)
     println("params loaded")
     flush(stdout)
-    pp = params.pp
-    imgp = params.imgp
-    optp = params.optp
-    recp = params.recp
+    pp = params_init.pp
+    imgp = params_init.imgp
+    optp = params_init.optp
+    recp = params_init.recp
     
-    #if stochastic opt is turned on, check that other parameters are consistent
-    if optp.stochastic
-        if imgp.noise_level == 0
-            error("noise level is zero; change noise to nonzero")
-        end
-        if ! optp.optimize_alpha 
-            error("optimize_alpha is set to false; change to true")
-        end
-        if optp.xtol_rel != 0
-            error("xtol_rel is nonzero; change to zero")
-        end
+    #check that parameters are consistent
+    if imgp.noise_level == 0
+        error("noise level is zero; change noise to nonzero")
+    end
+    if ! optp.optimize_alpha 
+        error("optimize_alpha is set to false; change to true")
+    end
+    if optp.xtol_rel != 0
+        error("xtol_rel is nonzero; change to zero")
     end
     
     #prepare physics
@@ -310,37 +368,16 @@ function run_opt(pname, presicion, parallel, opt_date)
     Tinit_flat = prepare_reconstruction(recp, imgp)
     plan_nearfar, plan_PSF = prepare_fft_plans(pp, imgp)
     weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)
-    geoms_init = prepare_geoms(params)
+    geoms_init = prepare_geoms(params_init)
     
     if optp.optimize_alpha
-        parameters = [geoms_init[:]; optp.α_scaling * optp.αinit]
+        params_opt = [geoms_init[:]; optp.α_scaling * optp.αinit]
     else
-        parameters = geoms_init[:]
-    end
-    
-    #if not doing stochastic opt, generate Tmaps and noises and save them in files
-    if ! optp.stochastic
-        Tmaps = prepare_objects(imgp, pp)
-        noises = prepare_noises(imgp)
-
-        #save Tmaps
-        Tmaps_flat = reduce(hcat, [Tmaps[i][:] for i in 1:length(Tmaps)])
-        file_save_Tmaps_flat = "$directory/Tmaps_$opt_date.csv"
-        writedlm( file_save_Tmaps_flat,  Tmaps_flat,',')
-
-        #save noises
-        noises_flat = reduce(hcat, [noises[i][:] for i in 1:imgp.objN])
-        file_save_noises_flat = "$directory/noises_$opt_date.csv"
-        writedlm( file_save_noises_flat,  noises_flat,',')
+        params_opt = geoms_init[:]
     end
     
     #prepare opt files
-    if optp.stochastic
-        opt_id = @sprintf("%s_stochastic_geoms_%s_%d_%d_%d_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, optp.αinit, optp.maxeval, optp.xtol_rel)
-    else
-        opt_id = @sprintf("%s_geoms_%s_%d_%d_%d_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, optp.αinit, optp.maxeval, optp.xtol_rel)
-    end
-    
+    opt_id = @sprintf("%s_geoms_%s_%d_%d_%d_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, optp.αinit, optp.maxeval, optp.xtol_rel)
     directory = @sprintf("ImagingOpt.jl/optdata/%s", opt_id)
     Base.Filesystem.mkdir( directory )
     
@@ -370,66 +407,13 @@ function run_opt(pname, presicion, parallel, opt_date)
     open(file_save_cg_iters, "a") do io
         write(io, "Default maxiter = $(imgp.objL^2); set to maxiter = $(optp.cg_maxiter_factor * imgp.objL^2) \n")
     end
-
-
-    function compute_obj_and_grad(parameters)
-        start = time()
     
-        if optp.stochastic
-            Tmaps = prepare_objects(imgp, pp)
-            noises = prepare_noises(imgp)
-        end
-    
-        if optp.optimize_alpha
-            geoms = reshape(parameters[1:end-1], pp.gridL, pp.gridL)
-            α = parameters[end] / optp.α_scaling
-        else
-            geoms = reshape(parameters, pp.gridL, pp.gridL)
-            α = optp.αinit
-        end
-    
-        if parallel
-            far_fields = ThreadsX.map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
-            fftPSFs = ThreadsX.map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
-            dsur_dg_times_incidents = ThreadsX.map(iF->get_dsur_dg_times_incident(pp, freqs[iF], surrogates[iF], geoms, parallel),1:pp.orderfreq+1)
+    opt = Optimisers.ADAM(optp.η)
+    setup = Optimisers.setup(opt, params_opt)
 
-        else
-            far_fields = map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
-            fftPSFs = map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
-            dsur_dg_times_incidents = map(iF->get_dsur_dg_times_incident(pp, freqs[iF], surrogates[iF], geoms, parallel),1:pp.orderfreq+1)
-        end
+    for iter in 1:optp.maxeval
+        objective, grad = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel)
         
-        objective = convert(typeof(freqs[1]), 0)
-    
-        if optp.optimize_alpha
-            grad = zeros(typeof(freqs[1]), pp.gridL^2 + 1)
-        else
-            grad = zeros(typeof(freqs[1]), pp.gridL^2)
-        end
-        
-        for obji = 1:imgp.objN
-            Tmap = Tmaps[obji]
-            noise = noises[obji]
-            B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
-            
-            image_Tmap_grid = make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel);
-            #TO DO: save reconstruction data in csv (save data from one optimization iter in one row): return value and # of iterations
-            Test_flat = reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
-            
-            MSE = sum((Tmap[:] .- Test_flat).^2) / sum(Tmap.^2)
-            objective = objective +  (1/imgp.objN) * MSE
-            
-            grad_obji, num_cg_iters = dloss_dparams(pp, imgp, optp, recp, geoms, α, Tmap, B_Tmap_grid, Test_flat, image_Tmap_grid, noise, fftPSFs, dsur_dg_times_incidents, far_fields, freqs, plan_nearfar, plan_PSF, weights, parallel)
-
-            open(file_save_cg_iters, "a") do io
-                writedlm(io, num_cg_iters, ',')
-            end
-
-            grad = grad + (1/imgp.objN) * grad_obji
-        
-        end
-        elapsed = time() - start
-    
         #save objective val
         open(file_save_objective_vals, "a") do io
             writedlm(io, objective, ',')
@@ -437,67 +421,21 @@ function run_opt(pname, presicion, parallel, opt_date)
 
         #save alpha val
         if optp.optimize_alpha
+            α = params_opt[end] / optp.α_scaling
             open(file_save_alpha_vals, "a") do io
                 writedlm(io, α, ',')
             end
         end
     
-        println()
-        println(@sprintf("time elapsed = %f",elapsed))
-        flush(stdout)
-        objective, grad
+        setup, params_opt = Optimisers.update(setup, params_opt, grad)
+        params_opt[1:end-1] = (x -> clamp(x, pp.lbwidth, pp.ubwidth)).(params_opt[1:end-1])
+        params_opt[end] = clamp(params_opt[end], 0,Inf)
     end
-    
-    if optp.stochastic
-        opt = Optimisers.ADAM(optp.η)
-        setup = Optimisers.setup(opt, parameters)
 
-        for iter in 1:optp.maxeval
-            _, grad = compute_obj_and_grad(parameters)
-            setup, parameters = Optimisers.update(setup, parameters, grad)
-            parameters[1:end-1] = (x -> clamp(x, pp.lbwidth, pp.ubwidth)).(parameters[1:end-1])
-            parameters[end] = clamp(parameters[end], 0,Inf)
-        end
+    mingeoms = params_opt[1:end-1]
+    println("MAX EVAL REACHED")
+    dict_output = Dict("return_val" => "MAXEVAL_REACHED")
 
-        mingeoms = parameters[1:end-1]
-        println("MAX EVAL REACHED")
-        dict_output = Dict("return_val" => "MAXEVAL_REACHED")
-    else
-        function myfunc2(parameters::Vector, grad::Vector)
-            objective, grad_temp = compute_obj_and_grad(parameters)
-            if length(grad) > 0
-                grad[:] = grad_temp
-            end
-            objective
-        end
-        
-        if optp.optimize_alpha
-            opt = Opt(:LD_MMA, pp.gridL^2 + 1)
-        else
-            opt = Opt(:LD_MMA, pp.gridL^2)
-        end
-        opt.min_objective = myfunc2
-
-        if optp.optimize_alpha
-            opt.lower_bounds = [repeat([pp.lbwidth,],pp.gridL^2); 0]
-            opt.upper_bounds = [repeat([pp.ubwidth,],pp.gridL^2); Inf]
-        else
-            opt.lower_bounds = pp.lbwidth
-            opt.upper_bounds = pp.ubwidth
-        end
-
-        opt.xtol_rel = optp.xtol_rel
-        opt.maxeval = optp.maxeval
-
-        (minobj,minparams,ret) = optimize(opt, parameters)
-        if optp.optimize_alpha
-            mingeoms = minparams[1:end-1]
-        else
-            mingeoms = minparams
-        end
-        println("RETURN VALUE IS $ret")
-        dict_output = Dict("return_val" => ret)
-    end
     
     #save output data in json file
     output_data_filename = "$directory/output_data_$opt_date.json"
@@ -525,20 +463,8 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     surrogates, freqs = prepare_surrogate(pp)
     Tinit_flat = prepare_reconstruction(recp, imgp)
     
-    if optp.stochastic
-        Tmaps = prepare_objects(imgp, pp)
-        noises = prepare_noises(imgp)
-    else
-        #load Tmaps
-        file_save_Tmaps_flat = "$directory/Tmaps_$opt_date.csv"
-        Tmaps = readdlm(file_save_Tmaps_flat,',')
-        Tmaps = [reshape(Tmaps[:,i], imgp.objL,imgp.objL) for i in 1:size(Tmaps)[2]]
-
-        #load noises
-        file_save_noises_flat = "$directory/noises_$opt_date.csv"
-        noises = readdlm(file_save_noises_flat, ',')
-        noises = [reshape(noises[:,1], imgp.imgL, imgp.imgL) for i in 1:imgp.objN]
-    end
+    Tmaps = prepare_objects(imgp, pp)
+    noises = prepare_noises(imgp)
     
     plan_nearfar, plan_PSF = prepare_fft_plans(pp, imgp)
     weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)

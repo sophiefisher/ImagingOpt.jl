@@ -77,7 +77,6 @@ struct OptimizeParams{FloatType <: AbstractFloat, IntType <: Signed}
     xtol_rel::FloatType
     cg_maxiter_factor::IntType
     optimize_alpha::Bool
-    stochastic::Bool
     η::FloatType
 end
 

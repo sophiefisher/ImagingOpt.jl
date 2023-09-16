@@ -6,7 +6,7 @@ module ImagingOpt
     export nearfield, geoms_to_far, far_to_PSFs, PSFs_to_fftPSFs, get_fftPSF, get_PSF, get_far, get_fftPSF_from_far, make_image, reconstruct_object, reconstruction_objective, reconstruction_objective_simplified, gradient_reconstruction_T, gradient_reconstruction_T_autodiff,  get_image_diff_flat
     export dB_dT, d2B_dT2, Hes, term1plusterm2_hes, build_hessian, jacobian_vp_undiff, jacobian_vp_autodiff, jacobian_vp_manual, get_dsur_dg_times_incident, dloss_dparams
     export arrarr_to_multi
-    export get_params, get_α, compute_system_params, run_opt, process_opt, design_singlefreq_lens
+    export get_params, get_α, compute_system_params, compute_obj_and_grad, run_opt, process_opt, design_singlefreq_lens
 
     using FFTW
     using UUIDs
