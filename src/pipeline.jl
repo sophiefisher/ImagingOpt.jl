@@ -179,7 +179,7 @@ function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, r
         term1+term2
     end
     
-    opt = Opt(:LD_MMA, imgp.objL^2)
+    opt = Opt(:LD_LBFGS, imgp.objL^2)
     opt.lower_bounds = repeat([ convert(typeof(pp.lbfreq),3.0),], imgp.objL^2)
     #opt.xtol_rel = recp.xtol_rel
     opt.ftol_rel = recp.ftol_rel
