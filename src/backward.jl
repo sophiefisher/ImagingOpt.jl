@@ -354,7 +354,8 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, freqs, Test_flat, plan_nea
     else
         term3  = term3constant  * sum(iF->term3_iF(iF), 1:nF)
     end
-        
+    
+    #=
     figure(figsize=(8,3))
     subplot(1,2,1)
     imshow(reshape(term1, pp.gridL, pp.gridL))
@@ -363,6 +364,7 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, freqs, Test_flat, plan_nea
     subplot(1,2,2)
     imshow(reshape(term2, pp.gridL, pp.gridL))
     colorbar()
+    =#
     
     term1 + term2 + term3
     

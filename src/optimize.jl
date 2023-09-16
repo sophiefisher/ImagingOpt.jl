@@ -319,6 +319,7 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
         grad = zeros(typeof(freqs[1]), pp.gridL^2)
     end
 
+    num_cg_iters_list = Vector{Float64}(undef, imgp.objN)
     for obji = 1:imgp.objN
         Tmap = Tmaps[obji]
         noise = noises[obji]
@@ -332,14 +333,11 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
         objective = objective +  (1/imgp.objN) * MSE
 
         grad_obji, num_cg_iters = dloss_dparams(pp, imgp, optp, recp, geoms, α, Tmap, B_Tmap_grid, Test_flat, image_Tmap_grid, noise, fftPSFs, dsur_dg_times_incidents, far_fields, freqs, plan_nearfar, plan_PSF, weights, parallel)
-
-        open(file_save_cg_iters, "a") do io
-            writedlm(io, num_cg_iters, ',')
-        end
-
+        num_cg_iters_list[obji] = num_cg_iters
+        
         grad = grad + (1/imgp.objN) * grad_obji
     end
-    objective, grad
+    objective, grad, num_cg_iters_list
 end
 
 
@@ -412,7 +410,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     setup = Optimisers.setup(opt, params_opt)
 
     for iter in 1:optp.maxeval
-        objective, grad = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel)
+        objective, grad, num_cg_iters_list = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel)
         
         #save objective val
         open(file_save_objective_vals, "a") do io
@@ -425,6 +423,11 @@ function run_opt(pname, presicion, parallel, opt_date)
             open(file_save_alpha_vals, "a") do io
                 writedlm(io, α, ',')
             end
+        end
+    
+        #save number of conjugate gradient solve iterations 
+        open(file_save_cg_iters, "a") do io
+            writedlm(io, num_cg_iters_list, ',')
         end
     
         setup, params_opt = Optimisers.update(setup, params_opt, grad)
