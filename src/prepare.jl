@@ -218,6 +218,7 @@ function prepare_reconstruction(recp::ReconstructionParams, imgp::ImagingParams)
 end
 
 function prepare_noises(imgp::ImagingParams)
+    #Random.seed!(0)
     noises = [imgp.noise_level .* randn(imgp.imgL, imgp.imgL) for i in 1:imgp.objN]
 end
 

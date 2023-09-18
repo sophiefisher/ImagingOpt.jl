@@ -1,13 +1,13 @@
 function G(ugrid, fftPSFs, weight, lbfreq, ubfreq, plan)
-    ytemp = real.(convolve(ugrid, fftPSFs, plan))
+    #ytemp = real.(convolve(ugrid, fftPSFs, plan))
     #multiply by quadrature weight
-    (ytemp .* weight .* (ubfreq - lbfreq) )[:]
+    (real.(convolve(ugrid, fftPSFs, plan)) .* weight .* (ubfreq .- lbfreq) )[:]
 end
 
 function Gtranspose(ugrid, fftPSFs, weight, lbfreq, ubfreq, plan)
-    ytemp = real.(convolveT(ugrid, fftPSFs, plan))
+    #ytemp = real.(convolveT(ugrid, fftPSFs, plan))
     #multiply ytemp by quadrature weight
-    (ytemp .* weight .* (ubfreq - lbfreq) )[:]
+    (real.(convolveT(ugrid, fftPSFs, plan)) .* weight .* (ubfreq .- lbfreq) )[:]
 end
 
 
