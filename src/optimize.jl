@@ -284,7 +284,7 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
 end
 
 
-function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel)
+function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel, far_fields)
     pp = params_init.pp
     imgp = params_init.imgp
     optp = params_init.optp
@@ -302,7 +302,7 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
     end
 
     if parallel
-        @time far_fields = ThreadsX.map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+        @time far_fields[:] = ThreadsX.map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
         @time fftPSFs = ThreadsX.map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
         @time dsur_dg_times_incidents = ThreadsX.map(iF->get_dsur_dg_times_incident(pp, freqs[iF], surrogates[iF], geoms, parallel),1:pp.orderfreq+1)
 
@@ -409,8 +409,11 @@ function run_opt(pname, presicion, parallel, opt_date)
     opt = Optimisers.ADAM(optp.η)
     setup = Optimisers.setup(opt, params_opt)
 
+    far_fields =[Matrix{ComplexF64}(undef, pp.binL*(imgp.imgL + imgp.objL)), pp.binL*(imgp.imgL + imgp.objL)) for i in 1:pp.orderfreq+1]
     for iter in 1:optp.maxeval
-        @time objective, grad, num_cg_iters_list = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel)
+        println("starting next iter")
+        flush(stdout)
+        @time objective, grad, num_cg_iters_list = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel, far_fields)
         
         #save objective val
         open(file_save_objective_vals, "a") do io
