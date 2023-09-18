@@ -409,7 +409,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     opt = Optimisers.ADAM(optp.η)
     setup = Optimisers.setup(opt, params_opt)
 
-    far_fields =[Matrix{ComplexF64}(undef, pp.binL*(imgp.imgL + imgp.objL)), pp.binL*(imgp.imgL + imgp.objL)) for i in 1:pp.orderfreq+1]
+    far_fields = [Matrix{ComplexF64}(undef, imgp.binL*(imgp.imgL + imgp.objL), imgp.binL*(imgp.imgL + imgp.objL)) for _ in 1:pp.orderfreq+1]
     for iter in 1:optp.maxeval
         println("starting next iter")
         flush(stdout)
