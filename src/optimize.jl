@@ -187,7 +187,7 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     surrogate = surrogates[middle_freq_idx]
     freq = freqs[middle_freq_idx]
 
-    plan_nearfar = plan_fft!(zeros(Complex{typeof(freqs[1])}, (2*pp.gridL, 2*pp.gridL)), flags=FFTW.MEASURE)
+    plan_nearfar, _ = prepare_fft_plans(pp, imgp)
 
     geoms_init = fill((pp.lbwidth + pp.ubwidth)/2, pp.gridL^2)
 
