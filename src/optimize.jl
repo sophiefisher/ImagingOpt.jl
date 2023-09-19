@@ -332,7 +332,7 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
         MSE = sum((Tmap[:] .- Test_flat).^2) / sum(Tmap.^2)
         objective = objective +  (1/imgp.objN) * MSE
 
-        @time grad_obji, num_cg_iters = dloss_dparams(pp, imgp, optp, recp, geoms, α, Tmap, B_Tmap_grid, Test_flat, image_Tmap_grid, noise, fftPSFs, dsur_dg_times_incidents, far_fields, freqs, plan_nearfar, plan_PSF, weights, parallel)
+        grad_obji, num_cg_iters = dloss_dparams(pp, imgp, optp, recp, geoms, α, Tmap, B_Tmap_grid, Test_flat, image_Tmap_grid, noise, fftPSFs, dsur_dg_times_incidents, far_fields, freqs, plan_nearfar, plan_PSF, weights, parallel)
         num_cg_iters_list[obji] = num_cg_iters
         
         grad = grad + (1/imgp.objN) * grad_obji
