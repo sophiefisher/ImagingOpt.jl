@@ -168,7 +168,7 @@ function prepare_objects(imgp::ImagingParams, pp::PhysicsParams)
             end
             Tmap = rand(lbT:eps(floattype):ubT,imgp.objL, imgp.objL)
         end
-        Tmaps = [random_object() for i in 1:imgp.objN]
+        Tmaps = [random_object(i) for i in 1:imgp.objN]
         return Tmaps
     elseif imgp.object_type == "load_scale_single"
         #expects loaded array to be values from 0 to 1. scales values from lbT to ubT
@@ -218,7 +218,7 @@ function prepare_reconstruction(recp::ReconstructionParams, imgp::ImagingParams)
 end
 
 function prepare_noises(imgp::ImagingParams)
-    #Random.seed!(0)
+    Random.seed!(0)
     noises = [imgp.noise_level .* randn(imgp.imgL, imgp.imgL) for i in 1:imgp.objN]
 end
 

@@ -284,7 +284,7 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
 end
 
 
-function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel, far_fields)
+function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel)
     pp = params_init.pp
     imgp = params_init.imgp
     optp = params_init.optp
@@ -302,9 +302,9 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
     end
 
     if parallel
-        @time far_fields[:] = ThreadsX.map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
-        @time fftPSFs = ThreadsX.map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
-        @time dsur_dg_times_incidents = ThreadsX.map(iF->get_dsur_dg_times_incident(pp, freqs[iF], surrogates[iF], geoms, parallel),1:pp.orderfreq+1)
+        far_fields = ThreadsX.map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+        fftPSFs = ThreadsX.map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
+        dsur_dg_times_incidents = ThreadsX.map(iF->get_dsur_dg_times_incident(pp, freqs[iF], surrogates[iF], geoms, parallel),1:pp.orderfreq+1)
 
     else
         far_fields = map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
@@ -323,11 +323,11 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
     for obji = 1:imgp.objN
         Tmap = Tmaps[obji]
         noise = noises[obji]
-        @time B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+        B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
 
-        @time image_Tmap_grid = make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel);
+        image_Tmap_grid = make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel);
         #TO DO: save reconstruction data in csv (save data from one optimization iter in one row): return value and # of iterations
-        @time Test_flat = reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
+        Test_flat = reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
 
         MSE = sum((Tmap[:] .- Test_flat).^2) / sum(Tmap.^2)
         objective = objective +  (1/imgp.objN) * MSE
@@ -409,11 +409,8 @@ function run_opt(pname, presicion, parallel, opt_date)
     opt = Optimisers.ADAM(optp.η)
     setup = Optimisers.setup(opt, params_opt)
 
-    far_fields = [Matrix{ComplexF64}(undef, imgp.binL*(imgp.imgL + imgp.objL), imgp.binL*(imgp.imgL + imgp.objL)) for _ in 1:pp.orderfreq+1]
     for iter in 1:optp.maxeval
-        println("starting next iter")
-        flush(stdout)
-        @time objective, grad, num_cg_iters_list = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel, far_fields)
+        @time objective, grad, num_cg_iters_list = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel)
         
         #save objective val
         open(file_save_objective_vals, "a") do io
