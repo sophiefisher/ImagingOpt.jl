@@ -221,6 +221,10 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     opt.xtol_rel = 1e-8
     opt.maxeval = 5000
 
+    #println( objective(geoms_init) )
+    #println( mean(Zygote.gradient(objective, geoms_init)[1] ) )
+    #myfunc(geoms_init, similar(geoms_init))
+
     (minobj,mingeoms,ret) = optimize(opt, geoms_init)
     println("RETURN VALUE IS $ret")
 
