@@ -197,39 +197,30 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     function objective(geoms_flat)
         geoms_grid = reshape(geoms_flat, pp.gridL, pp.gridL)
         PSF = get_PSF(freq, surrogate, pp, imgp, geoms_grid, plan_nearfar, parallel)
-        PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1]
-    end
-
-    function myfunc(parameters::Vector, grad::Vector)
-        obj = objective(parameters)
+        obj = -1*(PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1])
     
-        if length(grad) > 0
-            grad[1:end] = Zygote.gradient(objective, parameters)[1]
-        end
-
-        open(file_save_objective_vals, "a") do io
+        @ignore_derivatives open(file_save_objective_vals, "a") do io
             writedlm(io, obj, ',')
         end
-
+    
         obj
     end
 
-    opt = Opt(:LD_LBFGS, pp.gridL^2)
-    opt.max_objective = myfunc
-    opt.lower_bounds = pp.lbwidth
-    opt.upper_bounds = pp.ubwidth
-    opt.xtol_rel = 1e-8
-    opt.maxeval = 5000
+    function grad!(grad::Vector, parameters::Vector)
+        grad[1:end] = Zygote.gradient(objective, parameters)[1]
+    end
 
-    #println( objective(geoms_init) )
-    #println( mean(Zygote.gradient(objective, geoms_init)[1] ) )
-    #myfunc(geoms_init, similar(geoms_init))
+    options = Optim.Options(f_tol=1e-8, iterations=5000)
+    method = Fminbox(Optim.LBFGS(m=10, linesearch=LineSearches.BackTracking() ))
+    ret_optim = Optim.optimize(objective, grad!, [pp.lbwidth for _ in 1:pp.gridL^2], [pp.ubwidth for _ in 1:pp.gridL^2], geoms_init, method, options)
 
-    (minobj,mingeoms,ret) = optimize(opt, geoms_init)
-    println("RETURN VALUE IS $ret")
+    mingeoms = Optim.minimizer(ret_optim)
+    f_converged = Optim.f_converged(ret_optim)
+    iteration_limit_reached = Optim.iteration_limit_reached(ret_optim)
+    iterations = Optim.iterations(ret_optim)
 
     #save output data in json file
-    dict_output = Dict("return_val" => ret)
+    dict_output = Dict("f_converged?" => f_converged, "iteration_limit_reached?" => iteration_limit_reached, "num_iterations" => iterations)
     output_data_filename = "$directory/output_data_$opt_date.json"
     open(output_data_filename,"w") do io
         JSON3.pretty(io, dict_output)
@@ -250,7 +241,7 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     plot(objdata,".-")
 
     subplot(1,2,2)
-    semilogy(objdata,".-")
+    semilogy(abs.(objdata),".-")
     tight_layout()
     savefig("$directory/objective_vals_$opt_date.png")
 
@@ -323,7 +314,7 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
         grad = zeros(typeof(freqs[1]), pp.gridL^2)
     end
 
-    num_cg_iters_list = Vector{Float64}(undef, imgp.objN)
+    num_cg_iters_list = Matrix{Float64}(undef, 1, imgp.objN)
     for obji = 1:imgp.objN
         Tmap = Tmaps[obji]
         noise = noises[obji]
@@ -397,7 +388,8 @@ function run_opt(pname, presicion, parallel, opt_date)
     end
     
     #file for saving objective vals
-    file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"   
+    file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"  
+    file_save_best_objective_vals = "$directory/best_objective_vals_$opt_date.csv"  
 
     #file for saving alpha vals
     if optp.optimize_alpha
@@ -405,7 +397,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     end
 
     #file for saving conjugate gradient solve iterations
-    file_save_cg_iters = "$directory/cg_iters_$opt_date.txt"
+    file_save_cg_iters = "$directory/cg_iters_$opt_date.csv"
     open(file_save_cg_iters, "a") do io
         write(io, "Default maxiter = $(imgp.objL^2); set to maxiter = $(optp.cg_maxiter_factor * imgp.objL^2) \n")
     end
@@ -413,17 +405,30 @@ function run_opt(pname, presicion, parallel, opt_date)
     opt = Optimisers.ADAM(optp.η)
     setup = Optimisers.setup(opt, params_opt)
 
+    params_opt_best = params_opt
+    obj_best = Inf
+
     for iter in 1:optp.maxeval
         @time objective, grad, num_cg_iters_list = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel)
+    
+        if objective < obj_best
+            obj_best = objective
+            params_opt_best[:] = params_opt
+        end
         
         #save objective val
         open(file_save_objective_vals, "a") do io
             writedlm(io, objective, ',')
         end
+    
+        #save best objective val
+        open(file_save_best_objective_vals, "a") do io
+            writedlm(io, obj_best, ',')
+        end
 
-        #save alpha val
+        #save best alpha val
         if optp.optimize_alpha
-            α = params_opt[end] / optp.α_scaling
+            α = params_opt_best[end] / optp.α_scaling
             open(file_save_alpha_vals, "a") do io
                 writedlm(io, α, ',')
             end
@@ -431,7 +436,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     
         #save number of conjugate gradient solve iterations 
         open(file_save_cg_iters, "a") do io
-            writedlm(io, num_cg_iters_list, ',')
+            writedlm(io, num_cg_iters_list,',')
         end
     
         setup, params_opt = Optimisers.update(setup, params_opt, grad)
@@ -439,7 +444,7 @@ function run_opt(pname, presicion, parallel, opt_date)
         params_opt[end] = clamp(params_opt[end], 0,Inf)
     end
 
-    mingeoms = params_opt[1:end-1]
+    mingeoms = params_opt_best[1:end-1]
     println("MAX EVAL REACHED")
     dict_output = Dict("return_val" => "MAXEVAL_REACHED")
 
@@ -658,15 +663,24 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     #plot objective values
     file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"
     objdata = readdlm(file_save_objective_vals,',')
-    figure(figsize=(20,6))
+    figure(figsize=(22,10))
     suptitle(L"\mathrm{objective \  data } ,  \langle \frac{|| T - T_{est} ||^2}{  || T ||^2} \rangle_{T}")
-    subplot(1,2,1)
+    subplot(2,2,1)
     plot(objdata,".-")
 
-    subplot(1,2,2)
+    subplot(2,2,2)
     semilogy(objdata,".-")
+
+    file_save_best_objective_vals = "$directory/best_objective_vals_$opt_date.csv"
+    objdata_best = readdlm(file_save_best_objective_vals,',')
+    subplot(2,2,3)
+    plot(objdata_best,".-",color="orange")
+
+    subplot(2,2,4)
+    semilogy(objdata_best,".-",color="orange")
     tight_layout()
     savefig("$directory/objective_vals_$opt_date.png")
+    
 
     #plot PSFs (make sure there are only 21 of them)
     if parallel

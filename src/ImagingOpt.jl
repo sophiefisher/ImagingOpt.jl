@@ -54,6 +54,8 @@ module ImagingOpt
     using Dates
     using LaTeXStrings
     using ImageQualityIndexes
+    using Optim
+    using LineSearches
 
     include("prepare.jl")
     include("utils.jl")
