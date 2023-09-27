@@ -373,7 +373,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     end
     
     #prepare opt files
-    opt_id = @sprintf("%s_geoms_%s_%d_%d_%d_alphainit_%.1e_maxeval_%d_xtolrel_%.1e", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, optp.αinit, optp.maxeval, optp.xtol_rel)
+    opt_id = @sprintf("%s_geoms_%s_%d_%d_%d_batchsize_%d_alphainit_%.1e_maxeval_%d", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, imgp.objN, optp.αinit, optp.maxeval)
     directory = @sprintf("ImagingOpt.jl/optdata/%s", opt_id)
     Base.Filesystem.mkdir( directory )
     
