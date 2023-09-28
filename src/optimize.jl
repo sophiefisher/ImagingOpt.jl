@@ -210,7 +210,7 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
         grad[1:end] = Zygote.gradient(objective, parameters)[1]
     end
 
-    options = Optim.Options(f_tol=1e-8, iterations=5000)
+    options = Optim.Options(f_tol=1e-8, iterations=5000, f_calls_limit=5000)
     method = Fminbox(Optim.LBFGS(m=10, linesearch=LineSearches.HagerZhang() ))
     ret_optim = Optim.optimize(objective, grad!, [pp.lbwidth for _ in 1:pp.gridL^2], [pp.ubwidth for _ in 1:pp.gridL^2], geoms_init, method, options)
 
