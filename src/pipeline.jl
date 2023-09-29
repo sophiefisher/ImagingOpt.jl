@@ -51,9 +51,21 @@ function get_fftPSF_from_far(far, freq, pp, imgp, plan_nearfar, plan_PSF)
     PSF = far_to_PSF(far, imgp.objL + imgp.imgL, imgp.binL, pp.PSF_scaling, freq)
     fftPSF = PSF_to_fftPSF(PSF, plan_PSF)
 end
+
+function get_PSF_freespace(freq, surrogate, pp, imgp, plan_nearfar)
+    incident =  ChainRulesCore.ignore_derivatives( ()-> prepare_incident(pp,freq) ) 
+    n2f_kernel =  ChainRulesCore.ignore_derivatives( ()-> prepare_n2f_kernel(pp,imgp,freq, plan_nearfar) )
+    far = convolve(incident, n2f_kernel, plan_nearfar)
+    PSF = far_to_PSF(far, imgp.objL + imgp.imgL, imgp.binL, pp.PSF_scaling, freq)
+end
+
+function get_fftPSF_freespace(freq, surrogate, pp, imgp, plan_nearfar, plan_PSF)
+    PSF = get_PSF_freespace(freq, surrogate, pp, imgp, plan_nearfar)
+    fftPSF = PSF_to_fftPSF(PSF, plan_PSF)
+end
 #end helper functions
 
-function make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel)
+function make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel::Bool=true, noise_multiplier=0)
     nF = pp.orderfreq + 1
     
     floattype = typeof(freqs[1])
@@ -78,11 +90,16 @@ function make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_
     end
     
     #add nosie 
-    if imgp.noise_abs
-        image_Tmap_grid = abs.(image_Tmap_grid_noiseless .+ mean(image_Tmap_grid_noiseless)* imgp.noise_level .*randn.(floattype) )
+    if imgp.differentiate_noise
+        image_Tmap_grid = image_Tmap_grid_noiseless .+ mean(image_Tmap_grid_noiseless).*noise
     else
-        image_Tmap_grid = image_Tmap_grid_noiseless .+ mean(image_Tmap_grid_noiseless)*noise
+        image_Tmap_grid = image_Tmap_grid_noiseless .+ noise_multiplier.*noise
     end
+        
+    if imgp.noise_abs
+        image_Tmap_grid = abs.(image_Tmap_grid)
+    end 
+        
     image_Tmap_grid
 end
 

@@ -329,30 +329,32 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, freqs, Test_flat, plan_nea
         term2  = sum(iF->term2_iF(iF), 1:nF)
     end
         
-    function term3constant_iF(iF)
-        (-2 / imgp.imgL^2 ) * lambda' * (dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) .* Gtranspose(noise, fftPSFs[iF], weights[iF], freq1, freqend, plan_PSF) )
-    end
+    if imgp.differentiate_noise
+        function term3constant_iF(iF)
+            (-2 / imgp.imgL^2 ) * lambda' * (dB_dT.(Test_flat, freqs[iF], pp.wavcen, pp.blackbody_scaling) .* Gtranspose(noise, fftPSFs[iF], weights[iF], freq1, freqend, plan_PSF) )
+        end
     
-    if parallel
-        term3constant  = ThreadsX.sum(iF->term3constant_iF(iF), 1:nF)
-    else
-        term3constant  = sum(iF->term3constant_iF(iF), 1:nF)
-    end
     
+        if parallel
+            term3constant  = ThreadsX.sum(iF->term3constant_iF(iF), 1:nF)
+        else
+            term3constant  = sum(iF->term3constant_iF(iF), 1:nF)
+        end
         
-    function term3_iF(iF)
-        freq = freqs[iF]
-        weight = weights[iF]
-        dsur_dg_times_incident = dsur_dg_times_incidents[iF]
-        far = far_fields[iF]
-        n2f_kernel = prepare_n2f_kernel(pp,imgp,freq, plan_nearfar);
-        uvector_dot_Gtransposedg_vvector(pp, imgp, freq, far, dsur_dg_times_incident, n2f_kernel, geoms, weight, freqend, freq1, B_Tmap_grid[:,:,iF], ones(imgp.imgL, imgp.imgL), plan_nearfar, plan_PSF, parallel)
-    end
-        
-    if parallel
-        term3  = term3constant * ThreadsX.sum(iF->term3_iF(iF), 1:nF)
-    else
-        term3  = term3constant  * sum(iF->term3_iF(iF), 1:nF)
+        function term3_iF(iF)
+            freq = freqs[iF]
+            weight = weights[iF]
+            dsur_dg_times_incident = dsur_dg_times_incidents[iF]
+            far = far_fields[iF]
+            n2f_kernel = prepare_n2f_kernel(pp,imgp,freq, plan_nearfar);
+            uvector_dot_Gtransposedg_vvector(pp, imgp, freq, far, dsur_dg_times_incident, n2f_kernel, geoms, weight, freqend, freq1, B_Tmap_grid[:,:,iF], ones(imgp.imgL, imgp.imgL), plan_nearfar, plan_PSF, parallel)
+        end
+
+        if parallel
+            term3  = term3constant * ThreadsX.sum(iF->term3_iF(iF), 1:nF)
+        else
+            term3  = term3constant  * sum(iF->term3_iF(iF), 1:nF)
+        end
     end
     
     #=
@@ -366,8 +368,13 @@ function jacobian_vp_manual(lambda, pp, imgp,  geoms, freqs, Test_flat, plan_nea
     colorbar()
     =#
     
-    term1 + term2 + term3
+    if imgp.differentiate_noise
+        ret = term1 + term2 + term3
+    else
+        ret = term1 + term2
+    end
     
+    ret
 end
     
     

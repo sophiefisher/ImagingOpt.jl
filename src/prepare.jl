@@ -66,6 +66,7 @@ struct ImagingParams{FloatType <: AbstractFloat, IntType <: Signed}
     noise_level::FloatType
     noise_abs::Bool
     emiss_noise_level::FloatType
+    differentiate_noise::Bool
 end
 
 struct OptimizeParams{FloatType <: AbstractFloat, IntType <: Signed}
@@ -228,5 +229,21 @@ function prepare_fft_plans(pp::PhysicsParams, imgp::ImagingParams)
     plan_PSF = plan_fft!(zeros(Complex{typeof(pp.lbfreq)}, (imgp.objL + imgp.imgL, imgp.objL + imgp.imgL)), flags=FFTW.MEASURE)
 
     plan_nearfar, plan_PSF
+end
+
+#only need if differentiate noise is false
+function prepare_noise_multiplier(pp::PhysicsParams, imgp::ImagingParams, surrogates, freqs, weights, plan_nearfar, plan_PSF, parallel::Bool=true)
+    noise = zeros(imgp.imgL, imgp.imgL)
+    
+    Tmap = prepare_objects(imgp, pp)[1]
+    B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+    get_fftPSF_freespace_iF = iF->get_fftPSF_freespace(freqs[iF], surrogates[iF], pp, imgp, plan_nearfar, plan_PSF)
+    if parallel
+        fftPSFs_freespace = ThreadsX.map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
+    else
+        fftPSFs_freespace = map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
+    end
+    image_Tmap_grid_freespace = make_image(pp, imgp, B_Tmap_grid, fftPSFs_freespace, freqs, weights, noise, plan_nearfar, plan_PSF, parallel, 0)
+    mean(image_Tmap_grid_freespace)
 end
     

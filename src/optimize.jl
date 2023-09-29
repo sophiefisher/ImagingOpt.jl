@@ -282,7 +282,7 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
 end
 
 
-function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel)
+function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel)
     pp = params_init.pp
     imgp = params_init.imgp
     optp = params_init.optp
@@ -323,7 +323,7 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
         noise = noises[obji]
         B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
 
-        image_Tmap_grid = make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel);
+        image_Tmap_grid = make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel, noise_multiplier);
         #TO DO: save reconstruction data in csv (save data from one optimization iter in one row): return value and # of iterations
         Test_flat = reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
 
@@ -366,6 +366,12 @@ function run_opt(pname, presicion, parallel, opt_date)
     weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)
     geoms_init = prepare_geoms(params_init)
     
+    if ! imgp.differentiate_noise
+        noise_multiplier = 0
+    else
+        noise_multiplier = prepare_noise_multiplier(pp, imgp, surrogates, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    end
+        
     if optp.optimize_alpha
         params_opt = [geoms_init[:]; optp.α_scaling * optp.αinit]
     else
@@ -373,7 +379,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     end
     
     #prepare opt files
-    opt_id = @sprintf("%s_geoms_%s_%d_%d_%d_batchsize_%d_alphainit_%.1e_maxeval_%d", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, imgp.objN, optp.αinit, optp.maxeval)
+    opt_id = @sprintf("%s_geoms_%s_%d_%d_%d_batchsize_%d_alphainit_%.1e_maxeval_%d_diffnoise_%s", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, imgp.objN, optp.αinit, optp.maxeval, imgp.differentiate_noise)
     directory = @sprintf("ImagingOpt.jl/optdata/%s", opt_id)
     Base.Filesystem.mkdir( directory )
     
@@ -412,7 +418,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     obj_best = Inf
 
     for iter in 1:optp.maxeval
-        @time objective, grad, num_cg_iters_list = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, plan_nearfar, plan_PSF, parallel)
+        @time objective, grad, num_cg_iters_list = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel)
     
         if objective < obj_best
             obj_best = objective
