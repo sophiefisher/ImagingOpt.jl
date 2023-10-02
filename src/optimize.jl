@@ -366,7 +366,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)
     geoms_init = prepare_geoms(params_init)
     
-    if ! imgp.differentiate_noise
+    if imgp.differentiate_noise
         noise_multiplier = 0
     else
         noise_multiplier = prepare_noise_multiplier(pp, imgp, surrogates, freqs, weights, plan_nearfar, plan_PSF, parallel)
