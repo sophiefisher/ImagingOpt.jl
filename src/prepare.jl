@@ -64,7 +64,6 @@ struct ImagingParams{FloatType <: AbstractFloat, IntType <: Signed}
     object_loadfilename::String
     object_savefilestring::String
     noise_level::FloatType
-    noise_abs::Bool
     emiss_noise_level::FloatType
     differentiate_noise::Bool
 end
@@ -188,6 +187,7 @@ function prepare_objects(imgp::ImagingParams, pp::PhysicsParams)
     end
 end
 
+#TODO - doesn't need imgp as parameter
 function prepare_blackbody(Tmap::Matrix,  freqs::Vector, imgp::ImagingParams, pp::PhysicsParams)
     c = convert(typeof(freqs[1]),299792458)
     h = convert(typeof(freqs[1]),6.62607015e-34)
@@ -233,8 +233,6 @@ end
 
 #only need if differentiate noise is false
 function prepare_noise_multiplier(pp::PhysicsParams, imgp::ImagingParams, surrogates, freqs, weights, plan_nearfar, plan_PSF, parallel::Bool=true)
-    noise = zeros(imgp.imgL, imgp.imgL)
-    
     Tmap = prepare_objects(imgp, pp)[1]
     B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
     get_fftPSF_freespace_iF = iF->get_fftPSF_freespace(freqs[iF], surrogates[iF], pp, imgp, plan_nearfar, plan_PSF)
@@ -243,7 +241,12 @@ function prepare_noise_multiplier(pp::PhysicsParams, imgp::ImagingParams, surrog
     else
         fftPSFs_freespace = map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
     end
-    image_Tmap_grid_freespace = make_image(pp, imgp, B_Tmap_grid, fftPSFs_freespace, freqs, weights, noise, plan_nearfar, plan_PSF, parallel, 0)
+    image_Tmap_grid_freespace = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs_freespace, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    
     mean(image_Tmap_grid_freespace)
+end
+
+function prepare_weights(pp::PhysicsParams)
+    ClenshawCurtisQuadrature(pp.orderfreq + 1).weights
 end
     

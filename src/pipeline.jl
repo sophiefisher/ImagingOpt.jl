@@ -65,9 +65,8 @@ function get_fftPSF_freespace(freq, surrogate, pp, imgp, plan_nearfar, plan_PSF)
 end
 #end helper functions
 
-function make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel::Bool=true, noise_multiplier=0)
+function make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel::Bool=true)
     nF = pp.orderfreq + 1
-    
     floattype = typeof(freqs[1])
         
     if imgp.emiss_noise_level != 0
@@ -88,17 +87,19 @@ function make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_
     else
         image_Tmap_grid_noiseless = sum(iF->image_Tmap_grid_noiseless_iF(iF), 1:nF)
     end
+        
+    image_Tmap_grid_noiseless
+end
+
+function make_image(pp, imgp, differentiate_noise, B_Tmap_grid, fftPSFs, freqs, weights, noise, noise_multiplier, plan_nearfar, plan_PSF, parallel::Bool=true)
+    image_Tmap_grid_noiseless = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
     
-    #add nosie 
-    if imgp.differentiate_noise
+    #add noise 
+    if differentiate_noise
         image_Tmap_grid = image_Tmap_grid_noiseless .+ mean(image_Tmap_grid_noiseless).*noise
     else
         image_Tmap_grid = image_Tmap_grid_noiseless .+ noise_multiplier.*noise
     end
-        
-    if imgp.noise_abs
-        image_Tmap_grid = abs.(image_Tmap_grid)
-    end 
         
     image_Tmap_grid
 end
@@ -118,7 +119,7 @@ function get_image_diff_flat(Test_flat, image_Tmap_flat, pp, imgp, fftPSFs, freq
 end
 
 
-function reconstruction_objective_simplified(Test_flat, α, image_diff_flat, subtract_reg, print_objvals::Bool=false)
+function reconstruction_objective(Test_flat, α, image_diff_flat, subtract_reg, print_objvals::Bool=false)
     term1 = image_diff_flat'*image_diff_flat
     term2 = α*( (Test_flat .- subtract_reg)'*(Test_flat .- subtract_reg) )
         
@@ -151,7 +152,7 @@ end
 function gradient_reconstruction_T_autodiff(Test_flat::Vector, image_Tmap_flat, pp, imgp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, parallel)
     function obj(Test_flat)
         image_diff_flat = get_image_diff_flat(Test_flat, image_Tmap_flat, pp, imgp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
-        term1, term2 = reconstruction_objective_simplified(Test_flat, α, image_diff_flat, recp.subtract_reg)
+        term1, term2 = reconstruction_objective(Test_flat, α, image_diff_flat, recp.subtract_reg)
         term1 + term2
     end
     
@@ -159,7 +160,7 @@ function gradient_reconstruction_T_autodiff(Test_flat::Vector, image_Tmap_flat, 
 end
 
 #reconstruction
-function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, save_Tmaps::Bool=false, save_objvals::Bool=false, parallel::Bool=true, print_objvals::Bool=false)
+function reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, save_Tmaps::Bool=false, save_objvals::Bool=false, parallel::Bool=true, print_objvals::Bool=false, print_ret::Bool=true)
     rec_id = Dates.now()
         
     nF = pp.orderfreq + 1
@@ -177,6 +178,57 @@ function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, r
             grad[:] = gradient_reconstruction_T(Test_flat, image_diff_flat, α, pp, imgp, recp, fftPSFs, freqs, plan_nearfar, plan_PSF, weights, parallel)
         end
         #obj = objective(Test_flat)
+        term1, term2 = reconstruction_objective(Test_flat, α, image_diff_flat,recp.subtract_reg, print_objvals)
+
+        if save_objvals
+            open(objvals_filename, "a") do io
+                writedlm(io, [term1+term2 term1 term2], ',')
+            end
+        end
+
+            
+        (term1+term2)
+    end
+    
+    opt = Opt(:LD_LBFGS, imgp.objL^2)
+    opt.lower_bounds = repeat([ convert(typeof(pp.lbfreq),3.0),], imgp.objL^2)
+    #opt.xtol_rel = recp.xtol_rel
+    opt.ftol_rel = recp.ftol_rel
+        
+    opt.min_objective = myfunc
+    #opt.vector_storage = 10
+
+    (minf,minT,ret) = NLopt.optimize(opt, Tinit_flat)
+    minT = convert.(typeof(freqs[1]),minT)
+    num_evals = opt.numevals
+    
+    if save_Tmaps
+        Tmaps_filename = "ImagingOpt.jl/recdata/Tmaps_$(rec_id).csv"
+        writedlm( Tmaps_filename,   minT,',')
+    end
+    #println(@sprintf("minf is %.2f", minf))
+    if print_ret
+        println(@sprintf("reconstruction return value is %s", ret))
+        println(@sprintf("minimum objective value is %f", minf))
+        println(@sprintf("number of function evaluations is %d", num_evals) )
+        flush(stdout) 
+        end
+    minT, string(ret), num_evals
+end
+
+#=
+function reconstruct_object_optim(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, save_Tmaps::Bool=false, save_objvals::Bool=false, parallel::Bool=true, print_objvals::Bool=false, print_ret::Bool=true)
+    rec_id = Dates.now()
+        
+    nF = pp.orderfreq + 1
+    image_Tmap_flat = image_Tmap_grid[:]
+
+    if save_objvals
+        objvals_filename = "ImagingOpt.jl/recdata/objvals_$(rec_id).csv"
+    end
+        
+    function myfunc(Test_flat::Vector)
+        image_diff_flat = get_image_diff_flat(Test_flat, image_Tmap_flat, pp, imgp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
         term1, term2 = reconstruction_objective_simplified(Test_flat, α, image_diff_flat,recp.subtract_reg, print_objvals)
 
         if save_objvals
@@ -185,24 +237,44 @@ function reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, r
             end
         end
             
-        term1+term2
+        #println(term1+term2)
+        #flush(stdout)
+            
+        (term1+term2)
     end
     
-    opt = Opt(:LD_LBFGS, imgp.objL^2)
-    opt.lower_bounds = repeat([ convert(typeof(pp.lbfreq),3.0),], imgp.objL^2)
-    #opt.xtol_rel = recp.xtol_rel
-    opt.ftol_rel = recp.ftol_rel
-    opt.min_objective = myfunc
-
-    (minf,minT,ret) = NLopt.optimize!(opt, Tinit_flat)
-    minT = convert.(typeof(freqs[1]),minT)
+    function grad!(grad::Vector, Test_flat::Vector)
+        image_diff_flat = get_image_diff_flat(Test_flat, image_Tmap_flat, pp, imgp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+        grad[:] = gradient_reconstruction_T(Test_flat, image_diff_flat, α, pp, imgp, recp, fftPSFs, freqs, plan_nearfar, plan_PSF, weights, parallel)
+    end
     
+    options = Optim.Options(f_tol=recp.ftol_rel)
+    method = Fminbox(Optim.LBFGS(m=10, linesearch=LineSearches.HagerZhang() ));
+    #method = Fminbox(Optim.LBFGS(m=10, linesearch=LineSearches.BackTracking() ));
+        
+    ret_optim = Optim.optimize(myfunc, grad!, repeat([ convert(typeof(pp.lbfreq),3.0),], imgp.objL^2), repeat([ Inf], imgp.objL^2), Tinit_flat, method, options)
+    
+    minT = Optim.minimizer(ret_optim)
+    #TO DO: why do I need this?
+    #f_converged = Optim.f_converged(ret_optim)
+        
     if save_Tmaps
         Tmaps_filename = "ImagingOpt.jl/recdata/Tmaps_$(rec_id).csv"
         writedlm( Tmaps_filename,  hcat( minT, Tmap[:]),',')
     end
-    #println(@sprintf("minf is %.2f", minf))
-    println(@sprintf("reconstruction return value is %s", ret))
-    flush(stdout) 
+        
+    if print_ret
+        println(ret_optim)
+            
+        println(Optim.summary(ret_optim))
+        println("f_converged = $(Optim.f_converged(ret_optim))")
+        println("x_converged = $(Optim.x_converged(ret_optim))")
+        println("converged = $(Optim.converged(ret_optim))")
+            
+        flush(stdout)
+    end
+    
     minT
+    #ret_optim
 end
+=#

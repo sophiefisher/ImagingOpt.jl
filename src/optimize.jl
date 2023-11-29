@@ -17,7 +17,6 @@ function (project::ChainRulesCore.ProjectTo{SArray})(dx::AbstractArray{S,M}) whe
 end
 
 ### Adjoint for SArray constructor
-
 function ChainRulesCore.rrule(::Type{T}, x::Tuple) where {T<:SArray}
     project_x = ProjectTo(x)
     Array_pullback(ȳ) = (NoTangent(), project_x(ȳ))
@@ -34,7 +33,6 @@ const PARAMS_DIR = "ImagingOpt.jl/params"
 
 
 function get_params(pname, presicion, dir=PARAMS_DIR )
-    
     if presicion == "double"
         floattype = Float64
         inttype = Int64
@@ -64,21 +62,64 @@ function get_α(image_Tmap_flat, pp, imgp, recp, fftPSFs, freqs, weights, plan_n
     (image_diff_flat'*image_diff_flat)/( (Trand_flat .- recp.subtract_reg )'*(Trand_flat .- recp.subtract_reg) )
 end
 
+function print_params(pp, imgp, optp, recp)
+    println("######################### printing physics params #########################")
+    lblambda = pp.wavcen / pp.ubfreq 
+    ublambda = pp.wavcen / pp.lbfreq 
+    println("wavelengths: $(round(lblambda,digits=4)) to $(round(ublambda,digits=4)) μm")
+    println("chebyshev order in wavelength: $(pp.orderfreq) [$(pp.orderfreq+1) points]")
+    unit_cell_length = pp.wavcen * pp.cellL
+    println("unit cell length: $(round(unit_cell_length, digits=4)) μm")
+    println("unit cells: $(pp.gridL) x $(pp.gridL)")
+    println()
+    println("######################### printing image params #########################")
+    println("Tmap pixels: $(imgp.objL) x $(imgp.objL)")
+    println("image pixels: $(imgp.imgL) x $(imgp.imgL)")
+    println("binning: $(imgp.binL)")
+    println("Tmaps to train on: $(imgp.objN)")
+    println("Tmap lower bound: $(imgp.lbT) Kelvin")
+    println("Tmap upper bound: $(imgp.ubT) Kelvin")
+    println("differentiate noise?: $(imgp.differentiate_noise)")
+    println("noise level: $(imgp.noise_level)")
+    println()
+    println("######################### printing optimization params #########################")
+    println("initializing metasurface as: $(optp.geoms_init_type)")
+    println("initializing α as: $(optp.αinit)")
+    println("maximum evaluations: $(optp.maxeval)")
+    println()
+end
+
 function compute_system_params(pp, imgp)
+    println("######################### printing more system params #########################")
+    println()
+    
     image_pixel_size = imgp.binL * pp.wavcen * pp.cellL
-    println("image pixel size is $image_pixel_size μm")
+    println("image pixel size: $(round(image_pixel_size,digits=4)) μm")
+    
     object_pixel_size = image_pixel_size * pp.depth / pp.F
-    println("object pixel size is $object_pixel_size μm")
+    println("object pixel size: $( round(object_pixel_size,digits=4)) μm")
+    
+    diameter = pp.gridL * pp.cellL * pp.wavcen
+    println("diameter: $(round(diameter,digits=4)) μm [$( round(diameter / 1e4,digits=4)) cm]")
+    
     NA = sin(atan( pp.gridL * pp.cellL / (2 * pp.F) ))
-    println("the NA is $NA")
+    println("NA: $( round(NA,digits=4 ))")
+    
+    f_number = (pp.F)/(pp.gridL * pp.cellL)
+    println("f number: $(round(f_number,digits=4))")
+    
     lblambda = pp.wavcen / pp.ubfreq 
     ublambda = pp.wavcen / pp.lbfreq 
     midlambda = (ublambda + lblambda)/2
     difflimmiddle = midlambda / (2*NA)
     difflimupper = (ublambda) / (2*NA)
     difflimlower = (lblambda ) / (2*NA)
-    println("the diffraction limit for λ = $midlambda μm is $difflimmiddle μm ($difflimlower μm to $difflimupper for full bandwidth)")
-    Dict("object_pixel_size_μm" => object_pixel_size, "image_pixel_size_μm" => image_pixel_size, "NA" => NA, "diff_lim_middle_μm" => difflimmiddle, "diff_lim_lower_μm" => difflimlower, "diff_lim_upper_μm" => difflimupper)
+    println("diffraction limit for λ = $(round(lblambda,digits=4)) μm: $(round(difflimlower,digits=4)) μm")
+    println("diffraction limit for λ = $(round(midlambda,digits=4)) μm: $(round(difflimmiddle,digits=4)) μm")
+    println("diffraction limit for λ = $(round(ublambda,digits=4)) μm: $(round(difflimupper,digits=4)) μm")
+    println()
+    
+    Dict("object_pixel_size_μm" => object_pixel_size, "image_pixel_size_μm" => image_pixel_size, "NA" => NA, "diameter" => diameter, "f_number" => f_number, "diff_lim_middle_μm" => difflimmiddle, "diff_lim_lower_μm" => difflimlower, "diff_lim_upper_μm" => difflimupper)
 end
 
 #=
@@ -164,7 +205,8 @@ end
 
 function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     params = get_params(pname, presicion)
-    println("params loaded")
+    println("######################### params loaded #########################")
+    println()
     flush(stdout)
     pp = params.pp
     imgp = params.imgp
@@ -279,6 +321,8 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     end
     tight_layout()
     savefig("$directory/PSFs_$opt_date.png")
+
+    geoms
 end
 
 
@@ -318,14 +362,18 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
     end
 
     num_cg_iters_list = Matrix{Float64}(undef, 1, imgp.objN)
+    ret_vals = Matrix{String}(undef, 1, imgp.objN)
+    num_evals_list = Matrix{Float64}(undef, 1, imgp.objN)
     for obji = 1:imgp.objN
         Tmap = Tmaps[obji]
         noise = noises[obji]
         B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
 
-        image_Tmap_grid = make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel, noise_multiplier);
-        #TO DO: save reconstruction data in csv (save data from one optimization iter in one row): return value and # of iterations
-        Test_flat = reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
+        image_Tmap_grid = make_image(pp, imgp, imgp.differentiate_noise, B_Tmap_grid, fftPSFs, freqs, weights, noise, noise_multiplier, plan_nearfar, plan_PSF, parallel);
+
+        Test_flat, ret_val, num_evals = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel, false, false)
+        ret_vals[obji] = ret_val
+        num_evals_list[obji] = num_evals
 
         MSE = sum((Tmap[:] .- Test_flat).^2) / sum(Tmap.^2)
         objective = objective +  (1/imgp.objN) * MSE
@@ -335,13 +383,14 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
         
         grad = grad + (1/imgp.objN) * grad_obji
     end
-    objective, grad, num_cg_iters_list
+    objective, grad, num_cg_iters_list, ret_vals, num_evals_list
 end
 
 
 function run_opt(pname, presicion, parallel, opt_date)
     params_init = get_params(pname, presicion)
-    println("params loaded")
+    println("######################### params loaded #########################")
+    println()
     flush(stdout)
     pp = params_init.pp
     imgp = params_init.imgp
@@ -359,11 +408,14 @@ function run_opt(pname, presicion, parallel, opt_date)
         error("xtol_rel is nonzero; change to zero")
     end
     
+    #print params info
+    print_params(pp, imgp, optp, recp)
+    
     #prepare physics
     surrogates, freqs = prepare_surrogate(pp)
     Tinit_flat = prepare_reconstruction(recp, imgp)
     plan_nearfar, plan_PSF = prepare_fft_plans(pp, imgp)
-    weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)
+    weights = prepare_weights(pp)
     geoms_init = prepare_geoms(params_init)
     
     if imgp.differentiate_noise
@@ -379,8 +431,12 @@ function run_opt(pname, presicion, parallel, opt_date)
     end
     
     #prepare opt files
-    opt_id = @sprintf("%s_geoms_%s_%d_%d_%d_batchsize_%d_alphainit_%.1e_maxeval_%d_diffnoise_%s", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, imgp.objN, optp.αinit, optp.maxeval, imgp.differentiate_noise)
-    directory = @sprintf("ImagingOpt.jl/optdata/%s", opt_id)
+    lblambda = pp.wavcen / pp.ubfreq 
+    ublambda = pp.wavcen / pp.lbfreq 
+    unit_cell_length = pp.wavcen * pp.cellL
+    opt_id = "$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)_$(imgp.objN)_$(imgp.lbT)_$(imgp.ubT)_$(imgp.differentiate_noise)_$(imgp.noise_level)_$(optp.geoms_init_type)_$(optp.αinit)_$(optp.maxeval)"
+    #opt_id = @sprintf("%s_geoms_%s_%d_%d_%d_batchsize_%d_alphainit_%.1e_maxeval_%d_diffnoise_%s", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, imgp.objN, optp.αinit, optp.maxeval, imgp.differentiate_noise)
+    directory = "ImagingOpt.jl/optdata/$(opt_id)"
     Base.Filesystem.mkdir( directory )
     
     #save input parameters in json file
@@ -388,7 +444,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     open("$directory/$(pname)_$(opt_date).json", "w") do io
         JSON3.pretty(io, jsonread)
     end
-    #TO DO: add total diameter of lens; fstop 
+
     #save additional system parameters in json file
     extra_params = compute_system_params(pp, imgp)
     extra_params_filename = "$directory/extra_params_$opt_date.json"
@@ -405,6 +461,12 @@ function run_opt(pname, presicion, parallel, opt_date)
         file_save_alpha_vals = "$directory/alpha_vals_$opt_date.csv"   
     end
 
+    #file for saving return values of reconstructions
+    file_reconstruction_ret_vals = "$directory/reconstruction_return_vals_$opt_date.csv"
+
+    #file for saving number of function evals for reconstructions
+    file_reconstruction_num_evals = "$directory/reconstruction_num_function_evals_$opt_date.csv"
+
     #file for saving conjugate gradient solve iterations
     file_save_cg_iters = "$directory/cg_iters_$opt_date.csv"
     open(file_save_cg_iters, "a") do io
@@ -417,8 +479,10 @@ function run_opt(pname, presicion, parallel, opt_date)
     params_opt_best = params_opt
     obj_best = Inf
 
+    println("######################### beginning optimization #########################")
+    println()
     for iter in 1:optp.maxeval
-        @time objective, grad, num_cg_iters_list = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel)
+        @time objective, grad, num_cg_iters_list, ret_vals, num_evals_list = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel)
     
         if objective < obj_best
             obj_best = objective
@@ -443,6 +507,16 @@ function run_opt(pname, presicion, parallel, opt_date)
             end
         end
     
+        #save return value of reconstruction
+        open(file_reconstruction_ret_vals, "a") do io
+            writedlm(io, ret_vals,',')
+        end
+    
+        #save number of function evals of reconstruction
+        open(file_reconstruction_num_evals, "a") do io
+            writedlm(io, num_evals_list,',')
+        end
+    
         #save number of conjugate gradient solve iterations 
         open(file_save_cg_iters, "a") do io
             writedlm(io, num_cg_iters_list,',')
@@ -452,12 +526,11 @@ function run_opt(pname, presicion, parallel, opt_date)
         params_opt[1:end-1] = (x -> clamp(x, pp.lbwidth, pp.ubwidth)).(params_opt[1:end-1])
         params_opt[end] = clamp(params_opt[end], 0,Inf)
     end
+    println()
 
     mingeoms = params_opt_best[1:end-1]
-    println("MAX EVAL REACHED")
+    println("######################### MAX EVAL REACHED #########################")
     dict_output = Dict("return_val" => "MAXEVAL_REACHED")
-
-    
     #save output data in json file
     output_data_filename = "$directory/output_data_$opt_date.json"
     open(output_data_filename,"w") do io
@@ -480,196 +553,30 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     imgp = params.imgp
     optp = params.optp
     recp = params.recp
-    
     surrogates, freqs = prepare_surrogate(pp)
     Tinit_flat = prepare_reconstruction(recp, imgp)
-    
-    Tmaps = prepare_objects(imgp, pp)
-    noises = prepare_noises(imgp)
-    
     plan_nearfar, plan_PSF = prepare_fft_plans(pp, imgp)
-    weights = convert.( typeof(freqs[1]), ClenshawCurtisQuadrature(pp.orderfreq + 1).weights)
-    
-    #TO DO: if starting from random metasurface, save and then reload geoms here
-    geoms_init = prepare_geoms(params)
-    
-    #save initial reconstruction
+    weights = prepare_weights(pp)
     iqi = SSIM(KernelFactors.gaussian(1.5, 11), (1,1,1)) #standard parameters for SSIM
-    if parallel
-        fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    if imgp.differentiate_noise
+        noise_multiplier = 0
     else
-        fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+        noise_multiplier = prepare_noise_multiplier(pp, imgp, surrogates, freqs, weights, plan_nearfar, plan_PSF, parallel)
     end
     
-    figure(figsize=(16,10))
-    suptitle("initial reconstruction")
-    for obji = 1:imgp.objN
-        Tmap = Tmaps[obji]
-        noise = noises[obji]
-        B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
-
-        image_Tmap_grid = make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel);
-        Test = reshape(reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, optp.αinit, false, false, parallel), imgp.objL, imgp.objL)
-        
-        subplot(imgp.objN, 4, obji*4 - 3)
-        imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
-        colorbar()
-        title(L"T(x,y) \ %$obji")
+    Tmaps_random = prepare_objects(imgp, pp) #assuming random Tmaps
+    noises_random = prepare_noises(imgp)
     
-        subplot(imgp.objN, 4, obji*4 - 2)
-        imshow(Test, vmin = imgp.lbT, vmax = imgp.ubT)
-        colorbar()
-        title(L"T_{est}(x,y) \ %$obji")
-    
-        subplot(imgp.objN, 4, obji*4 - 1 )
-        imshow( (Test .- Tmap)./Tmap .* 100)
-        colorbar()
-        MSE = sum((Tmap .- Test).^2) / sum(Tmap.^2)
-        title("% difference $obji.\n MSE = $MSE")
-        
-        ssim_map = ImageQualityIndexes._ssim_map(iqi, Tmap, Test )
-        subplot(imgp.objN, 4, obji*4  )
-        imshow( ssim_map )
-        colorbar()
-        title("SSIM.\n mean = $(mean(ssim_map))")
-    end
-    tight_layout()
-    savefig("$directory/reconstruction_initial_$opt_date.png")
-    
-    #plot PSFs (make sure there are only 21 of them)
-    if parallel
-        PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, parallel),1:pp.orderfreq+1)
-    else
-        PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, parallel),1:pp.orderfreq+1)
-    end
-    figure(figsize=(20,9))
-    for i = 1:21
-        subplot(3,7,i)
-        imshow(PSFs[i])
-        colorbar()
-        title("PSF for ν = $(round(freqs[i],digits=3) )")
-    end
-    tight_layout()
-    savefig("$directory/PSFs_initial_$opt_date.png")
-    
-    #MIT initial reconstruction
-    fig_MIT, ax_MIT = subplots(2,5,figsize=(18,8))
     object_loadfilename_MIT = "MIT$(imgp.objL).csv"
     filename_MIT = @sprintf("ImagingOpt.jl/objdata/%s",object_loadfilename_MIT)
     lbT = imgp.lbT
     ubT = imgp.ubT
     diff = ubT - lbT
     Tmap_MIT = readdlm(filename_MIT,',',typeof(freqs[1])).* diff .+ lbT
-
-    B_Tmap_grid_MIT = prepare_blackbody(Tmap_MIT, freqs, imgp, pp)
-    image_Tmap_grid_MIT = make_image(pp, imgp, B_Tmap_grid_MIT, fftPSFs, freqs, weights, imgp.noise_level .* randn(imgp.imgL, imgp.imgL), plan_nearfar, plan_PSF, parallel);
-    Test_MIT = reshape(reconstruct_object(image_Tmap_grid_MIT, Tmap_MIT, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, optp.αinit, false, false, parallel), imgp.objL, imgp.objL)
-
-    p1 = ax_MIT[1,1].imshow(Tmap_MIT, vmin = imgp.lbT, vmax = imgp.ubT)
-    fig_MIT.colorbar(p1, ax=ax_MIT[1,1])
-    ax_MIT[1,1].set_title(L"T(x,y) \  \mathrm{initial}")
-
-    p2 = ax_MIT[1,2].imshow(Test_MIT, vmin = imgp.lbT, vmax = imgp.ubT)
-    fig_MIT.colorbar(p2, ax=ax_MIT[1,2])
-    ax_MIT[1,2].set_title(L"T_{est}(x,y) \  \mathrm{initial}")
+    Tmaps_MIT = [ Tmap_MIT ]
+    noises_MIT = [ imgp.noise_level .* randn(imgp.imgL, imgp.imgL); ]
     
-    p3 = ax_MIT[1,3].imshow( (Test_MIT .- Tmap_MIT)./Tmap_MIT .* 100)
-    fig_MIT.colorbar(p3, ax=ax_MIT[1,3])
-    MSE = sum((Tmap_MIT .- Test_MIT).^2) / sum(Tmap_MIT.^2)
-    ax_MIT[1,3].set_title("% difference initial.\n MSE = $MSE")
-
-    ssim_map = ImageQualityIndexes._ssim_map(iqi, Tmap_MIT, Test_MIT )
-    p4 = ax_MIT[1,4].imshow(ssim_map)
-    fig_MIT.colorbar(p4, ax=ax_MIT[1,4])
-    ax_MIT[1,4].set_title("SSIM initial.\n mean = $(mean(ssim_map))")
-
-    p5 = ax_MIT[1,5].imshow(image_Tmap_grid_MIT)
-    fig_MIT.colorbar(p5, ax=ax_MIT[1,5])
-    ax_MIT[1,5].set_title("image initial")
-    
-    #now use optimized geoms and optimized alpha
-    if optp.optimize_alpha
-        file_save_alpha_vals = "$directory/alpha_vals_$opt_date.csv"   
-        alpha_vals = readdlm(file_save_alpha_vals,',')
-        α = alpha_vals[end]
-    else
-        α = optp.αinit
-    end
-    
-    geoms_filename = "$directory/geoms_$opt_date.csv"
-    geoms = reshape(readdlm(geoms_filename,','),pp.gridL, pp.gridL )
-    
-    figure(figsize=(16,5))
-    subplot(1,3,1)
-    imshow( geoms_init , vmin = pp.lbwidth, vmax = pp.ubwidth)
-    colorbar()
-    title("initial metasurface \n parameters")
-    subplot(1,3,2)
-    imshow(geoms, vmin = pp.lbwidth, vmax = pp.ubwidth)
-    colorbar()
-    title("optimized metasurface \n parameters")
-    subplot(1,3,3)
-    imshow(geoms)
-    colorbar()
-    title("optimized metasurface \n parameters")
-    savefig("$directory/geoms_$opt_date.png")
-
-
-    #save optimized reconstructions and images
-    if parallel
-        fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
-    else
-        fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
-    end
-    
-    fig1, ax1 = subplots(imgp.objN,4,figsize=(16,10))
-    fig1.suptitle("optimized reconstruction")
-
-    fig2, ax2 = subplots(imgp.objN,2,figsize=(8,10))
-    fig2.suptitle("optimized images")
-    for obji = 1:imgp.objN
-        Tmap = Tmaps[obji]
-        noise = noises[obji]
-        B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
-
-        image_Tmap_grid = make_image(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, noise, plan_nearfar, plan_PSF, parallel);
-        Test = reshape(reconstruct_object(image_Tmap_grid, Tmap, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel), imgp.objL, imgp.objL)
-        
-        p1 = ax1[obji,1].imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
-        fig1.colorbar(p1, ax=ax1[obji,1])
-        ax1[obji,1].set_title(L"T(x,y) \ %$obji")
-    
-        p2 = ax1[obji,2].imshow(Test, vmin = imgp.lbT, vmax = imgp.ubT)
-        fig1.colorbar(p2, ax=ax1[obji,2])
-        ax1[obji,2].set_title(L"T_{est}(x,y) \ %$obji")
-    
-        p3 = ax1[ obji,3 ].imshow( (Test .- Tmap)./Tmap .* 100 )
-        fig1.colorbar(p3, ax = ax1[ obji,3 ])
-        MSE = sum((Tmap .- Test).^2) / sum(Tmap.^2)
-        ax1[obji,3].set_title("% difference $obji.\n MSE = $MSE")
-    
-        ssim_map = ImageQualityIndexes._ssim_map(iqi, Tmap, Test )
-        p4 = ax1[obji,4].imshow( ssim_map )
-        fig1.colorbar(p4, ax = ax1[ obji,4 ])
-        ax1[obji,4].set_title("SSIM.\n mean = $(mean(ssim_map))")
-    
-        p5 = ax2[obji,1].imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
-        fig2.colorbar(p5, ax = ax2[obji,1])
-        ax2[obji,1].set_title(L"T(x,y) \ %$obji")
-    
-        p6 = ax2[obji,2].imshow(image_Tmap_grid)
-        fig2.colorbar(p6, ax = ax2[obji,2])
-        ax2[obji,2].set_title("image $obji" )
-    
-    end
-    fig1.tight_layout()
-    fig1.savefig("$directory/reconstruction_optimized_$opt_date.png")
-
-    fig2.tight_layout()
-    fig2.savefig("$directory/images_optimized_$opt_date.png")
-
-
-    #plot objective values
+    ################################# plot objective and alpha values throughout opt #################################
     file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"
     objdata = readdlm(file_save_objective_vals,',')
     figure(figsize=(22,10))
@@ -690,56 +597,12 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     tight_layout()
     savefig("$directory/objective_vals_$opt_date.png")
     
-
-    #plot PSFs (make sure there are only 21 of them)
-    if parallel
-        PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
-    else
-        PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
-    end
-    figure(figsize=(20,9))
-    for i = 1:21
-        subplot(3,7,i)
-        imshow(PSFs[i])
-        colorbar()
-        title("PSF for ν = $(round(freqs[i],digits=3) )")
-    end
-    tight_layout()
-    savefig("$directory/PSFs_optimized_$opt_date.png")
-
-    #now try reconstruction on more readable image    
-    image_Tmap_grid_MIT = make_image(pp, imgp, B_Tmap_grid_MIT, fftPSFs, freqs, weights, imgp.noise_level .* randn(imgp.imgL, imgp.imgL), plan_nearfar, plan_PSF, parallel);
-    Test_MIT = reshape(reconstruct_object(image_Tmap_grid_MIT, Tmap_MIT, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel), imgp.objL, imgp.objL)
-
-    p1 = ax_MIT[2,1].imshow(Tmap_MIT, vmin = imgp.lbT, vmax = imgp.ubT)
-    fig_MIT.colorbar(p1, ax=ax_MIT[2,1])
-    ax_MIT[2,1].set_title(L"T(x,y) \  \mathrm{optimized}")
-
-    p2 = ax_MIT[2,2].imshow(Test_MIT, vmin = imgp.lbT, vmax = imgp.ubT)
-    fig_MIT.colorbar(p2, ax=ax_MIT[2,2])
-    ax_MIT[2,2].set_title(L"T_{est}(x,y) \  \mathrm{optimized}")
-    
-    p3 = ax_MIT[2,3].imshow( (Test_MIT .- Tmap_MIT)./Tmap_MIT .* 100)
-    fig_MIT.colorbar(p3, ax=ax_MIT[2,3])
-    MSE = sum((Tmap_MIT .- Test_MIT).^2) / sum(Tmap_MIT.^2)
-    ax_MIT[2,3].set_title("% difference optimized.\n MSE = $MSE")
-
-    ssim_map = ImageQualityIndexes._ssim_map(iqi, Tmap_MIT, Test_MIT )
-    p4 = ax_MIT[2,4].imshow(ssim_map)
-    fig_MIT.colorbar(p4, ax=ax_MIT[2,4])
-    ax_MIT[2,4].set_title("SSIM optimized.\n mean = $(mean(ssim_map))")
-
-    p5 = ax_MIT[2,5].imshow(image_Tmap_grid_MIT)
-    fig_MIT.colorbar(p5, ax=ax_MIT[2,5])
-    ax_MIT[2,5].set_title("image optimized")
-
-    fig_MIT.tight_layout()
-    fig_MIT.savefig("$directory/MIT_reconstruction_$opt_date.png")
-
-    #save alpha vals
     if optp.optimize_alpha
+        file_save_alpha_vals = "$directory/alpha_vals_$opt_date.csv"   
+        alpha_vals = readdlm(file_save_alpha_vals,',')
+        
         figure(figsize=(20,6))
-        suptitle(L"\alpha \mathrm{values }")
+        suptitle(L"\alpha \ \mathrm{values }")
         subplot(1,2,1)
         plot(alpha_vals,".-")
 
@@ -748,5 +611,351 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
         tight_layout()
         savefig("$directory/alpha_vals_$opt_date.png")
     end
+    
+    ################################# INITIAL geoms, alpha, and PSFs #################################
+    #TO DO: if starting from random metasurface, save and then reload geoms here
+    geoms_init = prepare_geoms(params)
+    if parallel
+        fftPSFs_init = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    else
+        fftPSFs_init = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    end
+    α_init = optp.αinit
+    
+    #plot initial PSFs
+    plot_PSFs(opt_date, directory, params, freqs, surrogates, plan_nearfar, geoms_init, parallel, "initial")
+    
+    #save initial random reconstruction
+    plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random, noises_random, plan_nearfar, plan_PSF, weights, noise_multiplier, fftPSFs_init, α_init, parallel, iqi, "initial", "random")
+    
+    #save initial MIT reconstruction
+    plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tmaps_MIT, noises_random, plan_nearfar, plan_PSF, weights, noise_multiplier, fftPSFs_init, α_init, parallel, iqi, "initial", "MIT")
+    
+    ################################# OPTIMIZED geoms, alpha, and PSFs #################################
+    geoms_filename = "$directory/geoms_$opt_date.csv"
+    geoms_optimized = reshape(readdlm(geoms_filename,','),pp.gridL, pp.gridL )
+    if parallel
+        fftPSFs_optimized = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_optimized, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    else
+        fftPSFs_optimized = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_optimized, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    end
+    if optp.optimize_alpha
+        α_optimized = alpha_vals[end]
+    else
+        α_optimized = optp.αinit
+    end
+    
+    #plot optimized PSFs
+    plot_PSFs(opt_date, directory, params, freqs, surrogates, plan_nearfar, geoms_optimized, parallel, "optimized")
+    
+    #save optimized random reconstruction
+    plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random, noises_random, plan_nearfar, plan_PSF, weights, noise_multiplier, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random")
+    
+    #save optimized MIT reconstruction
+    plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tmaps_MIT, noises_random, plan_nearfar, plan_PSF, weights, noise_multiplier, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT")
+    
+    #reconstructions for different noise levels, random and MIT Tmaps
+    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.05; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "random")
+    
+    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.05; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "MIT")
+    
+    ################################# plot geoms init and optimized side by side #################################
+    figure(figsize=(16,5))
+    subplot(1,3,1)
+    imshow( geoms_init , vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("initial metasurface \n parameters")
+    subplot(1,3,2)
+    imshow(geoms_optimized, vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    subplot(1,3,3)
+    imshow(geoms_optimized)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    savefig("$directory/geoms_$opt_date.png")
+    
+    ################################# get transmissions for initial and optimized metasurface #################################
+    get_fftPSF_freespace_iF = iF->get_fftPSF_freespace(freqs[iF], surrogates[iF], pp, imgp, plan_nearfar, plan_PSF)
+    if parallel
+        fftPSFs_freespace = ThreadsX.map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
+    else
+        fftPSFs_freespace = map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
+    end
+    
+    transmission_initial_random = get_transmission(pp, imgp, Tmaps_random[1], fftPSFs_freespace, fftPSFs_init, freqs, weights,  plan_nearfar, plan_PSF, parallel)
+    transmission_initial_MIT = get_transmission(pp, imgp, Tmap_MIT, fftPSFs_freespace, fftPSFs_init, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    transmission_optimized_random = get_transmission(pp, imgp, Tmaps_random[1], fftPSFs_freespace, fftPSFs_optimized, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    transmission_optimized_MIT = get_transmission(pp, imgp, Tmap_MIT, fftPSFs_freespace, fftPSFs_optimized, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    
+    dict_output = Dict("transmission_initial_random" => transmission_initial_random, "transmission_initial_MIT" => transmission_initial_MIT, "transmission_optimized_random" => transmission_optimized_random, "transmission_optimized_MIT" => transmission_optimized_MIT)
+    #save output data in json file
+    output_data_filename = "$(directory)/transmission.json"
+    open(output_data_filename,"w") do io
+        JSON3.pretty(io, dict_output)
+    end
+    
+    ################################# figure plots #################################
+    figure_plots_intial_directory = "ImagingOpt.jl/optdata/$opt_id/figure_plots_initial"
+    if ! isdir(figure_plots_intial_directory)
+        Base.Filesystem.mkdir( figure_plots_intial_directory )
+    end
+    plot_geoms_figure(geoms_init, figure_plots_intial_directory)
+    plot_PSFs_figure(pp, imgp, freqs, surrogates, geoms_init, plan_nearfar, parallel, figure_plots_intial_directory)
+    
+    plot_Tmap_image_reconstruction_figures(pp, imgp, optp, recp, Tmap_MIT, α_init, fftPSFs_init, Tinit_flat, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, figure_plots_intial_directory, "MIT")
+    plot_Tmap_image_reconstruction_figures(pp, imgp, optp, recp, Tmaps_random[1], α_init, fftPSFs_init, Tinit_flat, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, figure_plots_intial_directory, "random")
+    
+    
+    figure_plots_optimized_directory = "ImagingOpt.jl/optdata/$opt_id/figure_plots_optimized"
+    if ! isdir(figure_plots_optimized_directory)
+        Base.Filesystem.mkdir( figure_plots_optimized_directory )
+    end
+    plot_geoms_figure(geoms_optimized, figure_plots_optimized_directory)
+    plot_PSFs_figure(pp, imgp, freqs, surrogates, geoms_optimized, plan_nearfar, parallel, figure_plots_optimized_directory)
+    
+    plot_Tmap_image_reconstruction_figures(pp, imgp, optp, recp, Tmap_MIT, α_optimized, fftPSFs_optimized, Tinit_flat, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, figure_plots_optimized_directory, "MIT")
+    plot_Tmap_image_reconstruction_figures(pp, imgp, optp, recp, Tmaps_random[1], α_optimized, fftPSFs_optimized, Tinit_flat, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, figure_plots_optimized_directory, "random")
+    
+end
 
+function plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tmaps, noises, plan_nearfar, plan_PSF, weights, noise_multiplier, fftPSFs, α, parallel, iqi, geoms_type, Tmap_type)
+    pp = params.pp
+    imgp = params.imgp
+    optp = params.optp
+    recp = params.recp
+
+    num_Tmaps = length(Tmaps)
+    
+    figure(figsize=(18,3.5*num_Tmaps))
+    suptitle("$(geoms_type) reconstruction")
+    for obji = 1:num_Tmaps
+        Tmap = Tmaps[obji]
+        noise = noises[obji]
+        B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+
+        image_Tmap_grid = make_image(pp, imgp, imgp.differentiate_noise, B_Tmap_grid, fftPSFs, freqs, weights, noise, noise_multiplier, plan_nearfar, plan_PSF, parallel);
+        Test_flat, _ = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
+        Test = reshape(Test_flat, imgp.objL, imgp.objL)
+        
+        subplot(num_Tmaps, 5, obji*5 - 4)
+        imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
+        colorbar()
+        title(L"T(x,y) \ %$obji")
+    
+        subplot(num_Tmaps, 5, obji*5 - 3)
+        imshow(Test, vmin = imgp.lbT, vmax = imgp.ubT)
+        colorbar()
+        title(L"T_{est}(x,y) \ %$obji")
+    
+        subplot(num_Tmaps, 5, obji*5 - 2 )
+        imshow( (Test .- Tmap)./Tmap .* 100)
+        colorbar()
+        MSE = sum((Tmap .- Test).^2) / sum(Tmap.^2)
+        title("% difference \n MSE = $(round(MSE, digits=6))")
+        
+        ssim_map = ImageQualityIndexes._ssim_map(iqi, Tmap, Test )
+        subplot(num_Tmaps, 5, obji*5 - 1  )
+        imshow( ssim_map )
+        colorbar()
+        title("SSIM \n mean = $( round(mean(ssim_map),digits=6)  )")
+        
+        subplot(num_Tmaps, 5, obji*5)
+        imshow(image_Tmap_grid)
+        colorbar()
+        # calculate new noise level
+        if imgp.differentiate_noise
+            noise_level = imgp.noise_level
+        else
+            img_noiseless = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+            noise_level = imgp.noise_level * noise_multiplier / mean(img_noiseless)
+        end
+        title("image \n noise level is $( round(noise_level * 100,digits=4) )%")
+    end
+    tight_layout()
+    savefig("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_$(opt_date).png")
+end
+
+function plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap, noise_levels, plan_nearfar, plan_PSF, weights, fftPSFs, α, parallel, iqi, Tmap_type)
+    pp = params.pp
+    imgp = params.imgp
+    optp = params.optp
+    recp = params.recp
+    
+    B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+    num_noise_levels = length(noise_levels)
+    
+    figure(figsize=(18,3.5*num_noise_levels))
+    suptitle("$(Tmap_type) reconstruction at fixed noise levels")
+    for i = 1:num_noise_levels
+        noise_level = noise_levels[i]
+        noise = noise_level .* randn(imgp.imgL, imgp.imgL)
+        image_Tmap_grid = make_image(pp, imgp, true, B_Tmap_grid, fftPSFs, freqs, weights, noise, 0, plan_nearfar, plan_PSF, parallel);
+        Test_flat, _ = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
+        Test = reshape(Test_flat, imgp.objL, imgp.objL)
+        
+        subplot(num_noise_levels, 5, i*5 - 4)
+        imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
+        colorbar()
+        title(L"T(x,y)")
+    
+        subplot(num_noise_levels, 5, i*5 - 3)
+        imshow(Test, vmin = imgp.lbT, vmax = imgp.ubT)
+        colorbar()
+        title(L"T_{est}(x,y)")
+    
+        subplot(num_noise_levels, 5, i*5 - 2 )
+        imshow( (Test .- Tmap)./Tmap .* 100)
+        colorbar()
+        MSE = sum((Tmap .- Test).^2) / sum(Tmap.^2)
+        title("% difference \n MSE = $(round(MSE, digits=6))")
+        
+        ssim_map = ImageQualityIndexes._ssim_map(iqi, Tmap, Test )
+        subplot(num_noise_levels, 5, i*5 - 1  )
+        imshow( ssim_map )
+        colorbar()
+        title("SSIM \n mean = $( round(mean(ssim_map),digits=6)  )")
+        
+        subplot(num_noise_levels, 5, i*5)
+        imshow(image_Tmap_grid)
+        colorbar()
+        title("image \n noise level is $(noise_level * 100)%")
+    end
+    tight_layout()
+    savefig("$directory/$(Tmap_type)_reconstruction_optimized_fixed_noises_$(opt_date).png")
+end
+
+function plot_PSFs(opt_date, directory, params, freqs, surrogates, plan_nearfar, geoms, parallel, geoms_type)
+    pp = params.pp
+    imgp = params.imgp
+    optp = params.optp
+    recp = params.recp
+    
+    if parallel
+        PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    else
+        PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    end
+    
+    figure(figsize=(20,9))
+    #assumes 21 PSFs
+    for i = 1:21
+        subplot(3,7,i)
+        imshow(PSFs[i])
+        colorbar()
+        title("PSF for ν = $(round(freqs[i],digits=3) )")
+    end
+    tight_layout()
+    savefig("$directory/PSFs_$(geoms_type)_$opt_date.png")
+end
+
+function get_transmission(pp, imgp, Tmap, fftPSFs_freespace, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+    image_Tmap_grid_freespace = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs_freespace, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    image_Tmap_grid_nonoise = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    transmission = round(sum(image_Tmap_grid_nonoise) / sum(image_Tmap_grid_freespace) * 100,digits=2)
+end
+
+function plot_geoms_figure(geoms, directory)
+    figure(figsize=(5,5))
+    imshow(geoms, cmap="Greys_r")
+    axis("off")
+    savefig("$(directory)/geoms.png")
+end
+
+function plot_PSFs_figure(pp, imgp, freqs, surrogates, geoms, plan_nearfar, parallel, directory)
+    #plot PSFs (make sure there are only 21 of them)
+    if parallel
+        PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    else
+        PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    end
+    
+    figure(figsize=(12,6))
+    for i = 1:21
+        subplot(3,7,i)
+        imshow(PSFs[i])
+        wavelength = pp.wavcen ./ freqs[i]
+        title("λ = $(round(wavelength,digits=2) ) μm",fontsize=15)
+        axis("off")
+    end
+    tight_layout()
+    savefig("$(directory)/PSFs.png")
+end
+
+function plot_Tmap_figure(imgp, Tmap, directory, Tmap_type)
+    figure(figsize=(4,4))
+    imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT, cmap="Reds")
+    clb = colorbar()
+    axis("off")
+    clb.set_label("Temperature (°K)",fontsize=15)
+    clb.ax.tick_params(labelsize=15)
+    savefig("$(directory)/$(Tmap_type)_Tmap.png")
+end
+
+function plot_image_figure(pp, imgp, Tmap, fftPSFs, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, directory, Tmap_type, noise_model_type)
+    B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+    
+    if noise_model_type == "default"
+        noise = imgp.noise_level .* randn(imgp.imgL, imgp.imgL);
+        image_Tmap_grid = make_image(pp, imgp, imgp.differentiate_noise, B_Tmap_grid, fftPSFs, freqs, weights, noise, noise_multiplier, plan_nearfar, plan_PSF, parallel);
+        if imgp.differentiate_noise
+            noise_level = imgp.noise_level * 100
+        else
+            img_noiseless = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+            noise_level = imgp.noise_level * noise_multiplier / mean(img_noiseless) * 100
+        end
+    #otherwise, noise_model_type is equal to noise_level 
+        noise_model_type = "$(noise_model_type)_$(round(noise_level ,digits=4))"
+    else
+        noise_level = parse(Float64,noise_model_type) / 100
+        noise = noise_level .* randn(imgp.imgL, imgp.imgL);
+        image_Tmap_grid = make_image(pp, imgp, true, B_Tmap_grid, fftPSFs, freqs, weights, noise, 0, plan_nearfar, plan_PSF, parallel)
+    end
+    
+    figure(figsize=(4,4))
+    imshow(image_Tmap_grid)
+    #colorbar()
+    axis("off")
+    savefig("$(directory)/$(Tmap_type)_image_$(noise_model_type).png")
+    image_Tmap_grid, noise_model_type
+end
+
+function plot_reconstruction_figure(pp, imgp, optp, recp, image_Tmap_grid, Tinit_flat, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, parallel, directory, Tmap_type, noise_model_type)
+    Test_flat, _ = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
+    Test = reshape(Test_flat, imgp.objL, imgp.objL)
+    figure(figsize=(4,4))
+    imshow(Test, vmin = imgp.lbT, vmax = imgp.ubT, cmap="Reds")
+    clb = colorbar()
+    axis("off")
+    clb.set_label("Temperature (°K)",fontsize=15)
+    clb.ax.tick_params(labelsize=15)
+    savefig("$(directory)/$(Tmap_type)_Tmap_reconstructed_$(noise_model_type).png")
+    Test
+end
+
+function plot_percent_error_figure(Test, Tmap, directory, Tmap_type, noise_model_type)
+    figure(figsize=(4,4))
+    pd = (Test .- Tmap)./Tmap .* 100
+    imshow( pd, cmap = "Greys")
+    clb = colorbar()
+    title("|% error| < $( round(maximum(abs.(pd)),digits=2) )",fontsize=15)
+    clb.ax.tick_params(labelsize=15)
+    axis("off")
+    savefig("$(directory)/$(Tmap_type)_Tmap_percent_error_$(noise_model_type).png")
+end
+
+function plot_Tmap_image_reconstruction_figures(pp, imgp, optp, recp, Tmap, α, fftPSFs, Tinit_flat, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, directory, Tmap_type)
+    plot_Tmap_figure(imgp, Tmap, directory, Tmap_type)
+    image_Tmap_grid, noise_model_type = plot_image_figure(pp, imgp, Tmap, fftPSFs, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, directory, Tmap_type, "default")
+    Test = plot_reconstruction_figure(pp, imgp, optp, recp, image_Tmap_grid, Tinit_flat, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, parallel, directory, Tmap_type, noise_model_type)
+    plot_percent_error_figure(Test, Tmap, directory, Tmap_type, noise_model_type)
+    
+    noise_levels = ["1.0", "2.0", "5.0", "10.0"]
+    for noise_level in noise_levels
+        plot_Tmap_figure(imgp, Tmap, directory, Tmap_type)
+        image_Tmap_grid, noise_model_type = plot_image_figure(pp, imgp, Tmap, fftPSFs, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, directory, Tmap_type, noise_level)
+        Test = plot_reconstruction_figure(pp, imgp, optp, recp, image_Tmap_grid, Tinit_flat, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, parallel, directory, Tmap_type, noise_model_type)
+        plot_percent_error_figure(Test, Tmap, directory, Tmap_type, noise_model_type)
+    end
 end

@@ -192,6 +192,7 @@ function build_hessian(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfar, pl
 
 end
 
+#TO DO: test/update
 function jacobian_vp_undiff(lambda, pp, imgp,  geoms, surrogates, freqs, Test_flat, plan_nearfar, plan_PSF, weights, B_Tmap_grid, noise, parallel)
     nF = pp.orderfreq + 1
     #fftPSFs = [get_fftPSF(freqs[iF], surrogates[iF], weights[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel) for iF in 1:pp.orderfreq+1]
