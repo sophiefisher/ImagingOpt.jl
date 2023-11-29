@@ -19,7 +19,7 @@
         "in_air": "False",
         "models_dir": "ImagingOpt.jl/surdata",
         "blackbody_scaling": 1,
-        "PSF_scaling": 1000000000000
+        "PSF_scaling": 1e12
     },
     "imgp": {
         "objL": 32,
