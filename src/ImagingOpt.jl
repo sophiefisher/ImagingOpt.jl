@@ -57,6 +57,7 @@ prepare_noise_multiplier, prepare_weights
     using ImageQualityIndexes
     using Optim
     using LineSearches
+    using Interpolations
 
     include("prepare.jl")
     include("utils.jl")

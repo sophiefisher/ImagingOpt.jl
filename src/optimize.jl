@@ -62,31 +62,48 @@ function get_α(image_Tmap_flat, pp, imgp, recp, fftPSFs, freqs, weights, plan_n
     (image_diff_flat'*image_diff_flat)/( (Trand_flat .- recp.subtract_reg )'*(Trand_flat .- recp.subtract_reg) )
 end
 
-function print_params(pp, imgp, optp, recp)
-    println("######################### printing physics params #########################")
-    lblambda = pp.wavcen / pp.ubfreq 
-    ublambda = pp.wavcen / pp.lbfreq 
-    println("wavelengths: $(round(lblambda,digits=4)) to $(round(ublambda,digits=4)) μm")
-    println("chebyshev order in wavelength: $(pp.orderfreq) [$(pp.orderfreq+1) points]")
-    unit_cell_length = pp.wavcen * pp.cellL
-    println("unit cell length: $(round(unit_cell_length, digits=4)) μm")
-    println("unit cells: $(pp.gridL) x $(pp.gridL)")
-    println()
-    println("######################### printing image params #########################")
-    println("Tmap pixels: $(imgp.objL) x $(imgp.objL)")
-    println("image pixels: $(imgp.imgL) x $(imgp.imgL)")
-    println("binning: $(imgp.binL)")
-    println("Tmaps to train on: $(imgp.objN)")
-    println("Tmap lower bound: $(imgp.lbT) Kelvin")
-    println("Tmap upper bound: $(imgp.ubT) Kelvin")
-    println("differentiate noise?: $(imgp.differentiate_noise)")
-    println("noise level: $(imgp.noise_level)")
-    println()
-    println("######################### printing optimization params #########################")
-    println("initializing metasurface as: $(optp.geoms_init_type)")
-    println("initializing α as: $(optp.αinit)")
-    println("maximum evaluations: $(optp.maxeval)")
-    println()
+function print_params(pp, imgp, optp, recp, print_pp::Bool=true, print_imgp::Bool=true, print_optp::Bool=true, print_recp::Bool=true)
+    if print_pp
+        println("######################### printing physics params #########################")
+        lblambda = pp.wavcen / pp.ubfreq 
+        ublambda = pp.wavcen / pp.lbfreq 
+        println("wavelengths: $(round(lblambda,digits=4)) to $(round(ublambda,digits=4)) μm")
+        println("chebyshev order in wavelength: $(pp.orderfreq) [$(pp.orderfreq+1) points]")
+        unit_cell_length = pp.wavcen * pp.cellL
+        println("unit cell length: $(round(unit_cell_length, digits=4)) μm")
+        println("unit cells: $(pp.gridL) x $(pp.gridL)")
+        println("chebyshev order in width: $(pp.orderwidth)")
+        println()
+    end
+    
+    if print_imgp
+        println("######################### printing image params #########################")
+        println("Tmap pixels: $(imgp.objL) x $(imgp.objL)")
+        println("image pixels: $(imgp.imgL) x $(imgp.imgL)")
+        println("binning: $(imgp.binL)")
+        println("Tmaps to train on: $(imgp.objN)")
+        println("Tmap lower bound: $(imgp.lbT) Kelvin")
+        println("Tmap upper bound: $(imgp.ubT) Kelvin")
+        println("differentiate noise?: $(imgp.differentiate_noise)")
+        println("noise level: $(imgp.noise_level)")
+        println()
+    end
+        
+    if print_optp
+        println("######################### printing optimization params #########################")
+        println("initializing metasurface as: $(optp.geoms_init_type)")
+        println("initializing α as: $(optp.αinit)")
+        println("maximum evaluations: $(optp.maxeval)")
+        println()
+    end
+    
+    if print_recp
+        println("######################### printing reconstruction params #########################")
+        println("initializing Tmap as: $(recp.T_init_type)")
+        println("reconstruction objective tolerance: $(recp.ftol_rel)")
+        println("mean Tmap value to subtract from regularization term: $(recp.subtract_reg)")
+        println()
+    end
 end
 
 function compute_system_params(pp, imgp)
@@ -211,13 +228,20 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     pp = params.pp
     imgp = params.imgp
     
-    opt_id = @sprintf("%s_singlefreq_lens", opt_date)
+    print_params(pp, imgp, params.optp, params.recp, true, true, false, false)
+    flush(stdout)
+    
+    #prepare opt files
+    lblambda = pp.wavcen / pp.ubfreq 
+    ublambda = pp.wavcen / pp.lbfreq 
+    unit_cell_length = pp.wavcen * pp.cellL
+    opt_id = "$(opt_date)_singlefreq_lens_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)"
     directory = @sprintf("ImagingOpt.jl/geomsoptdata/%s", opt_id)
     Base.Filesystem.mkdir( directory )
     
     #save input parameters in json file
     jsonread = JSON3.read(read("$PARAMS_DIR/$pname.json", String))
-    open("$directory/$opt_id.json", "w") do io
+    open("$directory/$(pname)_$(opt_date).json", "w") do io
         JSON3.pretty(io, jsonread)
     end
 
@@ -252,8 +276,8 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
         grad[1:end] = Zygote.gradient(objective, parameters)[1]
     end
 
-    options = Optim.Options(f_tol=1e-8, iterations=5000, f_calls_limit=5000)
-    method = Fminbox(Optim.LBFGS(m=10, linesearch=LineSearches.HagerZhang() ))
+    options = Optim.Options( outer_iterations=1 )
+    method = Fminbox(Optim.LBFGS(m=10, linesearch=LineSearches.BackTracking() ))
     ret_optim = Optim.optimize(objective, grad!, [pp.lbwidth for _ in 1:pp.gridL^2], [pp.ubwidth for _ in 1:pp.gridL^2], geoms_init, method, options)
 
     println(ret_optim)
@@ -272,7 +296,7 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     end
 
     #save optimized metasurface parameters (geoms)
-    geoms_filename = "$directory/geoms_singlefreq_lens_$opt_date.csv"
+    geoms_filename = "$directory/geoms_singlefreq_lens_$(opt_id).csv"
     writedlm( geoms_filename,  mingeoms,',')
 
     #process opt
@@ -304,7 +328,7 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     imshow(geoms)
     colorbar()
     title("optimized metasurface \n parameters")
-    savefig("$directory/geoms_singlefreq_lens_$opt_date.png")
+    savefig("$directory/geoms_singlefreq_lens_$(opt_id).png")
 
     #plot PSFs (make sure there are only 21 of them)
     if parallel
@@ -410,6 +434,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     
     #print params info
     print_params(pp, imgp, optp, recp)
+    flush(stdout)
     
     #prepare physics
     surrogates, freqs = prepare_surrogate(pp)
@@ -434,7 +459,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     lblambda = pp.wavcen / pp.ubfreq 
     ublambda = pp.wavcen / pp.lbfreq 
     unit_cell_length = pp.wavcen * pp.cellL
-    opt_id = "$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)_$(imgp.objN)_$(imgp.lbT)_$(imgp.ubT)_$(imgp.differentiate_noise)_$(imgp.noise_level)_$(optp.geoms_init_type)_$(optp.αinit)_$(optp.maxeval)"
+    opt_id = "$(opt_date)_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)_$(imgp.objN)_$(imgp.lbT)_$(imgp.ubT)_$(imgp.differentiate_noise)_$(imgp.noise_level)_$(optp.geoms_init_type)_$(optp.αinit)_$(optp.maxeval)"
     #opt_id = @sprintf("%s_geoms_%s_%d_%d_%d_batchsize_%d_alphainit_%.1e_maxeval_%d_diffnoise_%s", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, imgp.objN, optp.αinit, optp.maxeval, imgp.differentiate_noise)
     directory = "ImagingOpt.jl/optdata/$(opt_id)"
     Base.Filesystem.mkdir( directory )
@@ -683,16 +708,22 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
         fftPSFs_freespace = map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
     end
     
-    transmission_initial_random = get_transmission(pp, imgp, Tmaps_random[1], fftPSFs_freespace, fftPSFs_init, freqs, weights,  plan_nearfar, plan_PSF, parallel)
-    transmission_initial_MIT = get_transmission(pp, imgp, Tmap_MIT, fftPSFs_freespace, fftPSFs_init, freqs, weights, plan_nearfar, plan_PSF, parallel)
-    transmission_optimized_random = get_transmission(pp, imgp, Tmaps_random[1], fftPSFs_freespace, fftPSFs_optimized, freqs, weights, plan_nearfar, plan_PSF, parallel)
-    transmission_optimized_MIT = get_transmission(pp, imgp, Tmap_MIT, fftPSFs_freespace, fftPSFs_optimized, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    transmission_relative_to_no_lens_initial = get_transmission_relative_to_no_lens(pp, imgp, Tmaps_random[1], fftPSFs_freespace, fftPSFs_init, freqs, weights,  plan_nearfar, plan_PSF, parallel)
     
-    dict_output = Dict("transmission_initial_random" => transmission_initial_random, "transmission_initial_MIT" => transmission_initial_MIT, "transmission_optimized_random" => transmission_optimized_random, "transmission_optimized_MIT" => transmission_optimized_MIT)
+    dict_output_initial = Dict("transmission_relative_to_no_lens" => transmission_relative_to_no_lens_initial)
     #save output data in json file
-    output_data_filename = "$(directory)/transmission.json"
+    output_data_filename = "$(directory)/transmissions_initial.json"
     open(output_data_filename,"w") do io
-        JSON3.pretty(io, dict_output)
+        JSON3.pretty(io, dict_output_initial)
+    end
+    
+    transmission_relative_to_no_lens_optimized = get_transmission_relative_to_no_lens(pp, imgp, Tmaps_random[1], fftPSFs_freespace, fftPSFs_optimized, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    
+    dict_output_optimized = Dict("transmission_relative_to_no_lens" => transmission_relative_to_no_lens_optimized)
+    #save output data in json file
+    output_data_filename = "$(directory)/transmissions_optimized.json"
+    open(output_data_filename,"w") do io
+        JSON3.pretty(io, dict_output_optimized)
     end
     
     ################################# figure plots #################################
@@ -849,7 +880,7 @@ function plot_PSFs(opt_date, directory, params, freqs, surrogates, plan_nearfar,
     savefig("$directory/PSFs_$(geoms_type)_$opt_date.png")
 end
 
-function get_transmission(pp, imgp, Tmap, fftPSFs_freespace, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+function get_transmission_relative_to_no_lens(pp, imgp, Tmap, fftPSFs_freespace, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
     B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
     image_Tmap_grid_freespace = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs_freespace, freqs, weights, plan_nearfar, plan_PSF, parallel)
     image_Tmap_grid_nonoise = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)

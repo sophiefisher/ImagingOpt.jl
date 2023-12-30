@@ -28,8 +28,10 @@ struct PhysicsParams{FloatType <: AbstractFloat, IntType <: Signed}
     blackbody_scaling::FloatType #scaling of the black body spectrum
     PSF_scaling::FloatType #scaling of the PSFs
     
+    nG::IntType
     
-    function PhysicsParams{FloatType, IntType}(lbλ_μm, ubλ_μm, orderλ, F_μm, depth_μm, gridL, cellL_μm, lbwidth_μm, ubwidth_μm, lbwidth_μm_load, ubwidth_μm_load, orderwidth, thicknessg_μm, materialg, thickness_sub_μm, materialsub, in_air, models_dir, blackbody_scaling, PSF_scaling) where {FloatType <: AbstractFloat} where {IntType <: Signed} 
+    
+    function PhysicsParams{FloatType, IntType}(lbλ_μm, ubλ_μm, orderλ, F_μm, depth_μm, gridL, cellL_μm, lbwidth_μm, ubwidth_μm, lbwidth_μm_load, ubwidth_μm_load, orderwidth, thicknessg_μm, materialg, thickness_sub_μm, materialsub, in_air, models_dir, blackbody_scaling, PSF_scaling, nG) where {FloatType <: AbstractFloat} where {IntType <: Signed} 
         wavcen = round(1/mean([1/lbλ_μm, 1/ubλ_μm]),digits=2)
 
         lbfreq = wavcen/ubλ_μm
@@ -47,7 +49,7 @@ struct PhysicsParams{FloatType <: AbstractFloat, IntType <: Signed}
         thicknessg = thicknessg_μm/wavcen
         thickness_sub = thickness_sub_μm/wavcen
         
-        new(lbfreq, ubfreq, orderλ, wavcen, F, depth, gridL, cellL, lbwidth, ubwidth, lbwidth_load, ubwidth_load,  orderwidth, thicknessg, materialg, thickness_sub, materialsub, in_air, models_dir, blackbody_scaling, PSF_scaling)
+        new(lbfreq, ubfreq, orderλ, wavcen, F, depth, gridL, cellL, lbwidth, ubwidth, lbwidth_load, ubwidth_load,  orderwidth, thicknessg, materialg, thickness_sub, materialsub, in_air, models_dir, blackbody_scaling, PSF_scaling, nG)
     end
     
 end
@@ -97,13 +99,55 @@ end
 
 function permittivity(mat::String, pp::PhysicsParams)
     wavcen = pp.wavcen
-    if mat == "Si"
+    if mat == "Si_no_absorption"
+        file = "ImagingOpt.jl/materialdata/Si_Shkondin_n.csv"
+        data = readdlm(file,',')
+        wavelengths_n = data[:,1]
+        nvals = data[:,2]
+        idxs = (wavelengths_n .< pp.wavcen/pp.lbfreq + 0.1) .&& (wavelengths_n .> pp.wavcen/pp.ubfreq - 0.1)
+        wavelengths_n = wavelengths_n[idxs]
+        nvals = nvals[idxs]
+        Si_n = Interpolations.LinearInterpolation(wavelengths_n, nvals)
+        
+        function Si_no_absorption(freq)
+            λ_μm = pp.wavcen / freq
+            Si_n(λ_μm)^2 
+        end
+        return Si_no_absorption
+        
+    elseif mat == "Si"
+        file = "ImagingOpt.jl/materialdata/Si_Shkondin_n.csv"
+        data = readdlm(file,',')
+        wavelengths_n = data[:,1]
+        nvals = data[:,2]
+        idxs = (wavelengths_n .< pp.wavcen/pp.lbfreq + 0.1) .&& (wavelengths_n .> pp.wavcen/pp.ubfreq - 0.1)
+        wavelengths_n = wavelengths_n[idxs]
+        nvals = nvals[idxs]
+        Si_n = Interpolations.LinearInterpolation(wavelengths_n, nvals)
+        
+        file = "ImagingOpt.jl/materialdata/Si_Shkondin_k.csv"
+        data = readdlm(file,',')
+        wavelengths_k = data[:,1]
+        kvals = data[:,2]
+        idxs = (wavelengths_k .< pp.wavcen/pp.lbfreq + 0.1) .&& (wavelengths_k .> pp.wavcen/pp.ubfreq - 0.1)
+        wavelengths_k = wavelengths_k[idxs]
+        kvals = kvals[idxs]
+        Si_k = Interpolations.LinearInterpolation(wavelengths_k, kvals)
+
+        function Si(freq)
+            λ_μm = pp.wavcen / freq
+            Si_n(λ_μm)^2 - Si_k(λ_μm)^2 + (2im * Si_n(λ_μm) * Si_k(λ_μm) )
+        end
+    end
+        
+    #=if mat == "Si"
         function Si(freq)
             λ_μm = wavcen / freq
             convert(typeof(freq),11.67316) + (1/λ_μm^2) + (convert(typeof(freq),0.004482633) / (λ_μm^2 - convert(typeof(freq),1.108205)^2) )
         end 
         return Si
-    end
+    end=#
+    
 end
     
 #TODO: have function (prepare_physics?) to process PhysicsParams into unit-less parameters, and provide center wavelength
@@ -115,6 +159,8 @@ function prepare_incident(pp::PhysicsParams,freq::AbstractFloat)
         ϵsub = ϵsubfunc(freq) 
         incident = incident_field(pp.depth, freq, √(ϵsub), pp.gridL, pp.cellL)
     end
+    
+    #incident = incident_field(pp.depth, freq, convert(typeof(freq),1), pp.gridL, pp.cellL)
     incident
 end
 
@@ -125,8 +171,7 @@ function prepare_n2f_kernel(pp::PhysicsParams,imgp::ImagingParams,freq::Abstract
 end
 
 function prepare_surrogate(pp::PhysicsParams)
-    models1D = get_models1D(pp.materialsub, pp.materialg, pp.in_air, pp.lbfreq, pp.ubfreq, pp.orderfreq, pp.lbwidth_load, pp.ubwidth_load, pp.orderwidth, pp.models_dir)
-    
+    models1D = get_models1D(pp.materialsub, pp.materialg, pp.in_air, pp.lbfreq, pp.ubfreq, pp.orderfreq, pp.lbwidth_load, pp.ubwidth_load, pp.orderwidth, pp.cellL, pp.thicknessg, pp.thickness_sub, pp.nG, pp.models_dir)
 end
 
 function prepare_geoms(params::JobParams)
