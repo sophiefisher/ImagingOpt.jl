@@ -15,16 +15,17 @@
         "ubwidth_μm_load":2.8,
         "orderwidth":640,
         "thicknessg_μm":10,
-        "materialg":"Si",
+        "materialg":"Si_no_absorption",
         
         "thickness_sub_μm":300,
-        "materialsub":"Si",
+        "materialsub":"Si_no_absorption",
         
         "in_air":"False",
         "models_dir": "ImagingOpt.jl/surdata", 
         
         "blackbody_scaling": 1,
-        "PSF_scaling":1e12
+        "PSF_scaling":1e9,
+        "nG":1000
     },
  
     "imgp": {
@@ -35,23 +36,22 @@
         "object_type": "random",
         "lbT":280,
         "ubT":310,
-        "object_loadfilename":"oval8.csv",
+        "object_loadfilename":"MIT8.csv",
         "object_savefilestring":"random_280_310",
         "noise_level": 0.02,
-        "noise_abs":false,
-        "emiss_noise_level":0.00
+        "emiss_noise_level":0.00,
+        "differentiate_noise":false
         
     },
     "optp": {
         "geoms_init_type":"uniform",
         "geoms_init_loadfilename":"geoms_singlefreq_lens_2023-07-31T22_31_46.689.csv",
-        "αinit":1,
+        "αinit":1e-3,
         "α_scaling":1,
-        "maxeval":1000,
+        "maxeval":10,
         "xtol_rel":0,
         "cg_maxiter_factor":4,
         "optimize_alpha":true,
-        "stochastic":true,
         "η": 1e-3
         
     },
