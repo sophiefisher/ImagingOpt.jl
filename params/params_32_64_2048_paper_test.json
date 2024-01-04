@@ -2,7 +2,7 @@
     "pp": {
         "lbλ_μm":8,
         "ubλ_μm":12,
-        "orderλ":20,
+        "orderλ":40,
         
         "F_μm": 20280,
         "depth_μm":200000,
@@ -34,8 +34,8 @@
         "binL": 7,
         "objN": 3,
         "object_type": "random",
-        "lbT":263.15,
-        "ubT":623.15,
+        "lbT":280,
+        "ubT":310,
         "object_loadfilename":"oval8.csv",
         "object_savefilestring":"random_280_310",
         "noise_level": 0.02,
@@ -44,12 +44,12 @@
         
     },
     "optp": {
-        "geoms_init_type":"load",
-        "geoms_init_loadfilename":"geoms_singlefreq_lens_2024-01-01T23_41_06.371_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_7.csv",
+        "geoms_init_type":"uniform",
+        "geoms_init_loadfilename":"geoms_singlefreq_lens_2023-09-27T22_47_43.140.csv",
         "geoms_init_loadsavename":"singlefreq_lens",
-        "αinit":1e-1,
+        "αinit":1,
         "α_scaling":1,
-        "maxeval":3500,
+        "maxeval":2,
         "xtol_rel":0,
         "cg_maxiter_factor":4,
         "optimize_alpha":true,
