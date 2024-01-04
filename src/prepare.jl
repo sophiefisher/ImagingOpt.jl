@@ -73,6 +73,7 @@ end
 struct OptimizeParams{FloatType <: AbstractFloat, IntType <: Signed}
     geoms_init_type::String
     geoms_init_loadfilename::String
+    geoms_init_loadsavename::String
     αinit::FloatType
     α_scaling::FloatType
     maxeval::IntType
@@ -171,7 +172,7 @@ function prepare_n2f_kernel(pp::PhysicsParams,imgp::ImagingParams,freq::Abstract
 end
 
 function prepare_surrogate(pp::PhysicsParams)
-    models1D = get_models1D(pp.materialsub, pp.materialg, pp.in_air, pp.lbfreq, pp.ubfreq, pp.orderfreq, pp.lbwidth_load, pp.ubwidth_load, pp.orderwidth, pp.cellL, pp.thicknessg, pp.thickness_sub, pp.nG, pp.models_dir)
+    surrogates, freqs = get_models1D(pp.materialsub, pp.materialg, pp.in_air, pp.lbfreq, pp.ubfreq, pp.orderfreq, pp.lbwidth_load, pp.ubwidth_load, pp.orderwidth, pp.cellL, pp.thicknessg, pp.thickness_sub, pp.nG, pp.models_dir)
 end
 
 function prepare_geoms(params::JobParams)

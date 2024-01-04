@@ -125,8 +125,8 @@ struct Hes{FloatType, IntType} <: LinearMap{FloatType}
     fftPSFs::Vector{Matrix{Complex{FloatType}}}
     freqs::Vector{FloatType}
     Test_flat::Vector{FloatType}
-    plan_nearfar::FFTW.cFFTWPlan{Complex{FloatType}, -1, true, 2, UnitRange{IntType}}
-    plan_PSF::FFTW.cFFTWPlan{Complex{FloatType}, -1, true, 2, UnitRange{IntType}}
+    plan_nearfar::FFTW.cFFTWPlan{Complex{FloatType}, -1, true, 2, Tuple{IntType, IntType}}
+    plan_PSF::FFTW.cFFTWPlan{Complex{FloatType}, -1, true, 2, Tuple{IntType, IntType}}
     weights::Vector{FloatType}
     blackbody_scaling::FloatType
     parallel::Bool
