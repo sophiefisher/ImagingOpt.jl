@@ -413,6 +413,7 @@ end
 
 function run_opt(pname, presicion, parallel, opt_date)
     params_init = get_params(pname, presicion)
+    jsonread = JSON3.read(read("$PARAMS_DIR/$pname.json", String))
     println("######################### params loaded #########################")
     println()
     flush(stdout)
@@ -469,7 +470,6 @@ function run_opt(pname, presicion, parallel, opt_date)
     Base.Filesystem.mkdir( directory )
     
     #save input parameters in json file
-    jsonread = JSON3.read(read("$PARAMS_DIR/$pname.json", String))
     open("$directory/$(pname)_$(opt_date).json", "w") do io
         JSON3.pretty(io, jsonread)
     end
@@ -596,12 +596,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     Tmaps_random = prepare_objects(imgp, pp) #assuming random Tmaps
     noises_random = prepare_noises(imgp)
     
-    object_loadfilename_MIT = "MIT$(imgp.objL).csv"
-    filename_MIT = @sprintf("ImagingOpt.jl/objdata/%s",object_loadfilename_MIT)
-    lbT = imgp.lbT
-    ubT = imgp.ubT
-    diff = ubT - lbT
-    Tmap_MIT = readdlm(filename_MIT,',',typeof(freqs[1])).* diff .+ lbT
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, (imgp.lbT + imgp.ubT)/2, imgp.lbT + (imgp.ubT - imgp.lbT)*(3/4) )
     Tmaps_MIT = [ Tmap_MIT ]
     noises_MIT = [ imgp.noise_level .* randn(imgp.imgL, imgp.imgL); ]
     
@@ -660,6 +655,11 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     #save initial MIT reconstruction
     plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tmaps_MIT, noises_random, plan_nearfar, plan_PSF, weights, noise_multiplier, fftPSFs_init, α_init, parallel, iqi, "initial", "MIT")
     
+    #reconstructions for different noise levels, random and MIT Tmaps
+    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α_init, parallel, iqi, "initial", "random")
+    
+    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α_init, parallel, iqi, "initial", "MIT")
+    
     ################################# OPTIMIZED geoms, alpha, and PSFs #################################
     geoms_filename = "$directory/geoms_$opt_date.csv"
     geoms_optimized = reshape(readdlm(geoms_filename,','),pp.gridL, pp.gridL )
@@ -683,10 +683,14 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     #save optimized MIT reconstruction
     plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tmaps_MIT, noises_random, plan_nearfar, plan_PSF, weights, noise_multiplier, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT")
     
-    #reconstructions for different noise levels, random and MIT Tmaps
-    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.05; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "random")
+    #reconstructions for different noise levels, random and MIT Tmaps (optimized alpha and alpha=0)
+    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random")
     
-    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.05; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "MIT")
+    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, 0, parallel, iqi, "optimized", "random")
+    
+    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT")
+    
+    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, 0, parallel, iqi, "optimized", "MIT")
     
     ################################# plot geoms init and optimized side by side #################################
     figure(figsize=(16,5))
@@ -752,6 +756,102 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     plot_Tmap_image_reconstruction_figures(pp, imgp, optp, recp, Tmap_MIT, α_optimized, fftPSFs_optimized, Tinit_flat, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, figure_plots_optimized_directory, "MIT")
     plot_Tmap_image_reconstruction_figures(pp, imgp, optp, recp, Tmaps_random[1], α_optimized, fftPSFs_optimized, Tinit_flat, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, figure_plots_optimized_directory, "random")
     
+    ################################# reconstructions on different temperature ranges #################################
+    more_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/more_reconstructions"
+    if ! isdir(more_reconstructions_directory)
+        Base.Filesystem.mkdir(more_reconstructions_directory)
+    end
+    
+    bg = (imgp.lbT + imgp.ubT)/2
+    logo = imgp.lbT + (imgp.ubT - imgp.lbT)*(1/4)
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    bg = (imgp.lbT + imgp.ubT)/2
+    logo = imgp.ubT 
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    bg = (imgp.lbT + imgp.ubT)/2
+    logo = imgp.lbT 
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    bg = imgp.lbT 
+    logo = imgp.ubT 
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    bg = (imgp.lbT + imgp.ubT)/2 - 1
+    logo = (imgp.lbT + imgp.ubT)/2 + 1
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    bg = 295
+    logo = 263.15
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    bg = 295
+    logo = 280
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    bg = 295
+    logo = 296
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    bg = 295
+    logo = 300
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    bg = 295
+    logo = 310
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    bg = 295
+    logo = 443.15
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    bg = 295
+    logo = 623.15
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    bg = 263.15
+    logo = 623.15
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    bg = 280
+    logo = 310
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    
+    lbT = 263.15
+    ubT = 623.15
+    Tmap_random = rand(lbT:eps():ubT,imgp.objL, imgp.objL)
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_random, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random_$(lbT)_$(ubT)")
+    
+    lbT = 280
+    ubT = 310
+    Tmap_random = rand(lbT:eps():ubT,imgp.objL, imgp.objL)
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_random, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random_$(lbT)_$(ubT)")
+    
+    lbT = 294
+    ubT = 296
+    Tmap_random = rand(lbT:eps():ubT,imgp.objL, imgp.objL)
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_random, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random_$(lbT)_$(ubT)")
+    
+    lbT = (imgp.lbT + imgp.ubT)/2 - 1
+    ubT = (imgp.lbT + imgp.ubT)/2 + 1
+    Tmap_random = rand(lbT:eps():ubT,imgp.objL, imgp.objL)
+    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_random, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random_$(lbT)_$(ubT)")
+    
 end
 
 function plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tmaps, noises, plan_nearfar, plan_PSF, weights, noise_multiplier, fftPSFs, α, parallel, iqi, geoms_type, Tmap_type)
@@ -787,13 +887,13 @@ function plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tma
         imshow( (Test .- Tmap)./Tmap .* 100)
         colorbar()
         MSE = sum((Tmap .- Test).^2) / sum(Tmap.^2)
-        title("% difference \n MSE = $(round(MSE, digits=6))")
+        title("% difference \n MSE = $(round(MSE, digits=8))")
         
         ssim_map = ImageQualityIndexes._ssim_map(iqi, Tmap, Test )
         subplot(num_Tmaps, 5, obji*5 - 1  )
         imshow( ssim_map )
         colorbar()
-        title("SSIM \n mean = $( round(mean(ssim_map),digits=6)  )")
+        title("SSIM \n mean = $( round(mean(ssim_map),digits=8)  )")
         
         subplot(num_Tmaps, 5, obji*5)
         imshow(image_Tmap_grid)
@@ -811,7 +911,7 @@ function plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tma
     savefig("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_$(opt_date).png")
 end
 
-function plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap, noise_levels, plan_nearfar, plan_PSF, weights, fftPSFs, α, parallel, iqi, Tmap_type)
+function plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap, noise_levels, plan_nearfar, plan_PSF, weights, fftPSFs, α, parallel, iqi, geoms_type, Tmap_type)
     pp = params.pp
     imgp = params.imgp
     optp = params.optp
@@ -820,8 +920,10 @@ function plot_reconstruction_fixed_noise_levels(opt_date, directory, params, fre
     B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
     num_noise_levels = length(noise_levels)
     
+    MSEs = Vector{Float64}(undef, length(noise_levels))
+    
     figure(figsize=(18,3.5*num_noise_levels))
-    suptitle("$(Tmap_type) reconstruction at fixed noise levels")
+    suptitle("$(Tmap_type) reconstruction at fixed noise levels ($(geoms_type)). α = $(@sprintf "%.4e" α )")
     for i = 1:num_noise_levels
         noise_level = noise_levels[i]
         noise = noise_level .* randn(imgp.imgL, imgp.imgL)
@@ -830,12 +932,12 @@ function plot_reconstruction_fixed_noise_levels(opt_date, directory, params, fre
         Test = reshape(Test_flat, imgp.objL, imgp.objL)
         
         subplot(num_noise_levels, 5, i*5 - 4)
-        imshow(Tmap, vmin = imgp.lbT, vmax = imgp.ubT)
+        imshow(Tmap, vmin = minimum(Tmap), vmax = maximum(Tmap))
         colorbar()
         title(L"T(x,y)")
     
         subplot(num_noise_levels, 5, i*5 - 3)
-        imshow(Test, vmin = imgp.lbT, vmax = imgp.ubT)
+        imshow(Test, vmin = minimum(Tmap), vmax = maximum(Tmap))
         colorbar()
         title(L"T_{est}(x,y)")
     
@@ -843,6 +945,7 @@ function plot_reconstruction_fixed_noise_levels(opt_date, directory, params, fre
         imshow( (Test .- Tmap)./Tmap .* 100)
         colorbar()
         MSE = sum((Tmap .- Test).^2) / sum(Tmap.^2)
+        MSEs[i] = MSE
         title("% difference \n MSE = $(round(MSE, digits=6))")
         
         ssim_map = ImageQualityIndexes._ssim_map(iqi, Tmap, Test )
@@ -857,7 +960,11 @@ function plot_reconstruction_fixed_noise_levels(opt_date, directory, params, fre
         title("image \n noise level is $(noise_level * 100)%")
     end
     tight_layout()
-    savefig("$directory/$(Tmap_type)_reconstruction_optimized_fixed_noises_$(opt_date).png")
+    savefig("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_α=$(@sprintf "%.4e" α )_fixed_noises_$(opt_date).png")
+    
+    open("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_α=$(@sprintf "%.4e" α )_fixed_noises_MSEs_$(opt_date).csv", "w") do io
+        writedlm(io, [noise_levels, MSEs],',')
+    end
 end
 
 function plot_PSFs(opt_date, directory, params, freqs, surrogates, plan_nearfar, geoms, parallel, geoms_type)
@@ -994,3 +1101,13 @@ function plot_Tmap_image_reconstruction_figures(pp, imgp, optp, recp, Tmap, α, 
         plot_percent_error_figure(Test, Tmap, directory, Tmap_type, noise_model_type)
     end
 end
+
+function load_MIT_Tmap(size, background_T, logo_T)
+    object_loadfilename_MIT = "MIT$(size).csv"
+    filename_MIT = @sprintf("ImagingOpt.jl/objdata/%s",object_loadfilename_MIT)
+    diff = logo_T - background_T
+    Tmap_MIT = readdlm(filename_MIT,',',Float64).* diff .+ background_T
+end
+
+
+
