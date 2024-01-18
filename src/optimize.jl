@@ -139,6 +139,178 @@ function compute_system_params(pp, imgp)
     Dict("object_pixel_size_μm" => object_pixel_size, "image_pixel_size_μm" => image_pixel_size, "NA" => NA, "diameter" => diameter, "f_number" => f_number, "diff_lim_middle_μm" => difflimmiddle, "diff_lim_lower_μm" => difflimlower, "diff_lim_upper_μm" => difflimupper)
 end
 
+
+function design_multifocal_lens(pname, presicion, parallel, opt_date)
+    params = get_params(pname, presicion)
+    pp = params.pp
+    imgp = params.imgp
+    
+    #prepare opt files
+    lblambda = pp.wavcen / pp.ubfreq 
+    ublambda = pp.wavcen / pp.lbfreq 
+    unit_cell_length = pp.wavcen * pp.cellL
+    opt_id = "$(opt_date)_multifocal_lens_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)"
+    directory = @sprintf("ImagingOpt.jl/geomsoptdata/%s", opt_id)
+    Base.Filesystem.mkdir( directory )
+    
+    #save input paoptimizerameters in json file
+    jsonread = JSON3.read(read("$PARAMS_DIR/$pname.json", String))
+    open("$directory/$(pname)_$(opt_date).json", "w") do io
+        JSON3.pretty(io, jsonread)
+    end
+
+    println("######################### params loaded #########################")
+    println()
+    flush(stdout)
+    print_params(pp, imgp, params.optp, params.recp, true, true, false, false)
+    flush(stdout)
+
+    #file for saving objective vals
+    file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"  
+
+    surrogates, freqs = prepare_surrogate(pp)
+    middle_freq_idx = (length(freqs) + 1) ÷ 2
+    surrogate = surrogates[middle_freq_idx]
+    freq = freqs[middle_freq_idx]
+    plan_nearfar, _ = prepare_fft_plans(pp, imgp)
+
+    geoms_init = fill((pp.lbwidth + pp.ubwidth)/2, pp.gridL^2)
+
+    psfL = imgp.objL + imgp.imgL
+    middle = div(psfL,2)
+    nF = pp.orderfreq + 1
+
+    function get_PSF_offset_center(freq, surrogate, geoms, xoffset, yoffset)
+        PSF = get_PSF(freq, surrogate, pp, imgp, geoms, plan_nearfar, parallel)
+        PSF[middle + yoffset, middle + xoffset] + PSF[middle+1+ yoffset,middle+ xoffset] + PSF[middle+ yoffset,middle+1+ xoffset] + PSF[middle+1+ yoffset,middle+1+ xoffset]
+    end
+
+    offset = Int(floor(3*div(imgp.imgL,8)))
+    xoffsets = [-offset, 0, offset, 0]
+    yoffsets = [0, -offset, 0, offset]
+
+    t_init = minimum(1:length(xoffsets)) do i
+        offset_center = get_PSF_offset_center(freq, surrogate, reshape(geoms_init,pp.gridL,pp.gridL), xoffsets[i], yoffsets[i])
+    end
+    x_init = [geoms_init[:]; t_init]
+
+    #=
+    #if using optim
+    function objective(x::Vector)
+        open(file_save_objective_vals, "a") do io
+            writedlm(io, x[end], ',')
+        end
+
+        x[end]
+    end
+
+    function grad!(grad::Vector, x::Vector)
+        grad[1:end-1] = zeros(pp.gridL^2)
+        grad[end] = 1
+    end=#
+
+    function myfunc(x::Vector, grad::Vector)
+        if length(grad) > 0
+            grad[1:end-1] = zeros( pp.gridL^2)
+            grad[end] = 1
+        end
+
+        open(file_save_objective_vals, "a") do io
+            writedlm(io, x[end], ',')
+        end
+
+        x[end]
+    end
+
+    function myconstraint(x::Vector, grad::Vector, i)
+        geoms_grid = reshape(x[1:end-1], pp.gridL, pp.gridL)
+        constraint = g -> get_PSF_offset_center(freq, surrogate, g, xoffsets[i], yoffsets[i])
+        if length(grad) > 0
+            grad[end] = 1
+            grad_grid = -1 * Zygote.gradient( constraint, geoms_grid )[1]
+            grad[1:end-1] = grad_grid[:]
+        end
+        x[end] - constraint(geoms_grid)
+    end
+
+    opt = Opt(:LD_MMA, pp.gridL^2 + 1)
+    opt.lower_bounds = [fill(pp.lbwidth,pp.gridL^2); -Inf]
+    opt.upper_bounds = [fill(pp.ubwidth,pp.gridL^2); Inf]
+    opt.max_objective = myfunc
+    for i = 1:length(xoffsets)
+        inequality_constraint!(opt, (x,grad) -> myconstraint(x, grad, i), 1e-8)
+    end
+    opt.xtol_rel = 1e-8
+    opt.maxeval = 5000
+
+    (maxf,maxx,ret) = NLopt.optimize(opt, x_init)
+    mingeoms = maxx[1:end-1]
+
+    println(ret)
+    flush(stdout)
+
+    #save output data in json file
+    dict_output = Dict("return_value?" => ret)
+    output_data_filename = "$directory/output_data_$opt_date.json"
+    open(output_data_filename,"w") do io
+        JSON3.pretty(io, dict_output)
+    end
+
+    #save optimized metasurface parameters (geoms)
+    geoms_filename = "$directory/geoms_multifocal_lens_$(opt_id).csv"
+    writedlm( geoms_filename,  mingeoms,',')
+
+    #process opt
+    geoms = reshape(mingeoms, pp.gridL, pp.gridL)
+
+    #plot objective values
+    objdata = readdlm(file_save_objective_vals,',')
+    figure(figsize=(20,6))
+    suptitle("objective data")
+    subplot(1,2,1)
+    plot(objdata,".-")
+    subplot(1,2,2)
+    semilogy(abs.(objdata),".-")
+    tight_layout()
+    savefig("$directory/objective_vals_$opt_date.png")
+
+    #plot geoms
+    figure(figsize=(16,5))
+    subplot(1,3,1)
+    imshow( reshape(geoms_init, pp.gridL, pp.gridL) , vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("initial metasurface \n parameters")
+    subplot(1,3,2)
+    imshow(geoms, vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    subplot(1,3,3)
+    imshow(geoms)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    savefig("$directory/geoms_$(opt_id).png")
+
+    #plot PSFs (make sure there are only 21 of them)
+    if parallel
+        PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    else
+        PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    end
+    figure(figsize=(20,9))
+    for i = 1:21
+        subplot(3,7,i)
+        imshow(PSFs[i])
+        colorbar()
+        title("PSF for ν = $(round(freqs[i],digits=3) )")
+    end
+    tight_layout()
+    savefig("$directory/PSFs_$opt_date.png")
+
+    geoms
+
+end
+
+
 function design_achromatic_lens(pname, presicion, parallel, opt_date)
     params = get_params(pname, presicion)
     pp = params.pp
