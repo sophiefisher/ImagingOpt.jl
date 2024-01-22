@@ -238,10 +238,10 @@ function design_multifocal_lens(pname, presicion, parallel, opt_date)
     opt.upper_bounds = [fill(pp.ubwidth,pp.gridL^2); Inf]
     opt.max_objective = myfunc
     for i = 1:length(xoffsets)
-        inequality_constraint!(opt, (x,grad) -> myconstraint(x, grad, i), 1e-8)
+        inequality_constraint!(opt, (x,grad) -> myconstraint(x, grad, i), 1e-6)
     end
-    opt.xtol_rel = 1e-8
-    opt.maxeval = 5000
+    opt.xtol_rel = 1e-6
+    opt.maxeval = 500
 
     (maxf,maxx,ret) = NLopt.optimize(opt, x_init)
     mingeoms = maxx[1:end-1]
@@ -405,10 +405,10 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date)
     opt.upper_bounds = [fill(pp.ubwidth,pp.gridL^2); Inf]
     opt.max_objective = myfunc
     for iF = 1:nF
-        inequality_constraint!(opt, (x,grad) -> myconstraint(x, grad, iF), 1e-8)
+        inequality_constraint!(opt, (x,grad) -> myconstraint(x, grad, iF), 1e-6)
     end
-    opt.xtol_rel = 1e-8
-    opt.maxeval = 5000
+    opt.xtol_rel = 1e-6
+    opt.maxeval = 500
 
     (maxf,maxx,ret) = NLopt.optimize(opt, x_init)
     mingeoms = maxx[1:end-1]
