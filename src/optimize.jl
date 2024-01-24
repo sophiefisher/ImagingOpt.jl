@@ -113,8 +113,17 @@ function compute_system_params(pp, imgp)
     image_pixel_size = imgp.binL * pp.wavcen * pp.cellL
     println("image pixel size: $(round(image_pixel_size,digits=4)) μm")
     
+    image_size = image_pixel_size * imgp.imgL
+    println("image size: $( round(image_size,digits=4)) μm [$( round(image_size / 1e4,digits=4)) cm]")
+    
     object_pixel_size = image_pixel_size * pp.depth / pp.F
     println("object pixel size: $( round(object_pixel_size,digits=4)) μm")
+    
+    object_size = object_pixel_size * imgp.objL
+    println("object size: $( round(object_size,digits=4)) μm [$( round(object_size / 1e4,digits=4)) cm]")
+    
+    object_angle = 2 * atan(object_size / (2 * (pp.depth * pp.wavcen) )) * 180 / pi
+    println("object angle: $(round(object_angle,digits=4)) degrees")
     
     diameter = pp.gridL * pp.cellL * pp.wavcen
     println("diameter: $(round(diameter,digits=4)) μm [$( round(diameter / 1e4,digits=4)) cm]")
@@ -124,6 +133,9 @@ function compute_system_params(pp, imgp)
     
     f_number = (pp.F)/(pp.gridL * pp.cellL)
     println("f number: $(round(f_number,digits=4))")
+    
+    FOV = 2 * atan(image_size / (2 * (pp.wavcen * pp.F) )) * 180 / pi
+    println("FOV: $(round(FOV,digits=4)) degrees")
     
     lblambda = pp.wavcen / pp.ubfreq 
     ublambda = pp.wavcen / pp.lbfreq 
@@ -136,7 +148,7 @@ function compute_system_params(pp, imgp)
     println("diffraction limit for λ = $(round(ublambda,digits=4)) μm: $(round(difflimupper,digits=4)) μm")
     println()
     
-    Dict("object_pixel_size_μm" => object_pixel_size, "image_pixel_size_μm" => image_pixel_size, "NA" => NA, "diameter" => diameter, "f_number" => f_number, "diff_lim_middle_μm" => difflimmiddle, "diff_lim_lower_μm" => difflimlower, "diff_lim_upper_μm" => difflimupper)
+    Dict("object_pixel_size_μm" => object_pixel_size, "object_size" => object_size, "image_pixel_size_μm" => image_pixel_size, "image_size" => image_size, "NA" => NA, "diameter" => diameter, "f_number" => f_number, "diff_lim_middle_μm" => difflimmiddle, "diff_lim_lower_μm" => difflimlower, "diff_lim_upper_μm" => difflimupper, "FOV" => FOV, "object_angle" => object_angle)
 end
 
 
@@ -1217,9 +1229,9 @@ function plot_reconstruction_fixed_noise_levels(opt_date, directory, params, fre
         title("image \n noise level is $(noise_level * 100)%")
     end
     tight_layout()
-    savefig("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_α_$(@sprintf "%.4e" α )_fixed_noises_$(opt_date).png")
+    savefig("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_$(@sprintf "%.4e" α )_fixed_noises_$(opt_date).png")
     
-    open("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_α_$(@sprintf "%.4e" α )_fixed_noises_MSEs_$(opt_date).csv", "w") do io
+    open("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_$(@sprintf "%.4e" α )_fixed_noises_MSEs_$(opt_date).csv", "w") do io
         writedlm(io, [noise_levels, MSEs],',')
     end
 end
