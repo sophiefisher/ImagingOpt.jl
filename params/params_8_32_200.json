@@ -45,7 +45,8 @@
     },
     "optp": {
         "geoms_init_type":"uniform",
-        "geoms_init_loadfilename":"geoms_singlefreq_lens_2023-07-31T22_31_46.689.csv",
+        "geoms_init_loadfilename":"geoms_test_8_32_200.csv",
+        "geoms_init_loadsavename":"test",
         "αinit":1e-3,
         "α_scaling":1,
         "maxeval":10,
