@@ -417,9 +417,9 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date)
     opt.upper_bounds = [fill(pp.ubwidth,pp.gridL^2); Inf]
     opt.max_objective = myfunc
     for iF = 1:nF
-        inequality_constraint!(opt, (x,grad) -> myconstraint(x, grad, iF), 1e-6)
+        inequality_constraint!(opt, (x,grad) -> myconstraint(x, grad, iF), 1e-8)
     end
-    opt.xtol_rel = 1e-6
+    opt.xtol_rel = 1e-8
     opt.maxeval = 500
 
     (maxf,maxx,ret) = NLopt.optimize(opt, x_init)
