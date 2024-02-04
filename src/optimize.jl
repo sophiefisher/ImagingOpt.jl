@@ -92,6 +92,9 @@ function print_params(pp, imgp, optp, recp, print_pp::Bool=true, print_imgp::Boo
     if print_optp
         println("######################### printing optimization params #########################")
         println("initializing metasurface as: $(optp.geoms_init_type)")
+        if optp.geoms_init_type == "load"
+            println("metasurface load type: $(optp.geoms_init_loadsavename)")
+        end
         println("initializing α as: $(optp.αinit)")
         println("maximum evaluations: $(optp.maxeval)")
         println()
@@ -152,7 +155,7 @@ function compute_system_params(pp, imgp)
 end
 
 
-function design_multifocal_lens(pname, presicion, parallel, opt_date)
+function design_multifocal_lens(pname, presicion, parallel, opt_date, maxeval = 1000, xtol_rel = 1e-8, ineq_tol = 1e-8)
     params = get_params(pname, presicion)
     pp = params.pp
     imgp = params.imgp
@@ -161,7 +164,7 @@ function design_multifocal_lens(pname, presicion, parallel, opt_date)
     lblambda = pp.wavcen / pp.ubfreq 
     ublambda = pp.wavcen / pp.lbfreq 
     unit_cell_length = pp.wavcen * pp.cellL
-    opt_id = "$(opt_date)_multifocal_lens_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)"
+    opt_id = "$(opt_date)_multifocal_lens_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)_$(maxeval)_$(xtol_rel)_$(ineq_tol)"
     directory = @sprintf("ImagingOpt.jl/geomsoptdata/%s", opt_id)
     Base.Filesystem.mkdir( directory )
     
@@ -250,10 +253,10 @@ function design_multifocal_lens(pname, presicion, parallel, opt_date)
     opt.upper_bounds = [fill(pp.ubwidth,pp.gridL^2); Inf]
     opt.max_objective = myfunc
     for i = 1:length(xoffsets)
-        inequality_constraint!(opt, (x,grad) -> myconstraint(x, grad, i), 1e-6)
+        inequality_constraint!(opt, (x,grad) -> myconstraint(x, grad, i), ineq_tol)
     end
-    opt.xtol_rel = 1e-6
-    opt.maxeval = 500
+    opt.xtol_rel = xtol_rel
+    opt.maxeval = maxeval
 
     (maxf,maxx,ret) = NLopt.optimize(opt, x_init)
     mingeoms = maxx[1:end-1]
@@ -262,14 +265,14 @@ function design_multifocal_lens(pname, presicion, parallel, opt_date)
     flush(stdout)
 
     #save output data in json file
-    dict_output = Dict("return_value?" => ret)
+    dict_output = Dict("return_value?" => ret, "maxeval" => maxeval, "xtol_rel" => xtol_rel, "ineq_tol" => ineq_tol)
     output_data_filename = "$directory/output_data_$opt_date.json"
     open(output_data_filename,"w") do io
         JSON3.pretty(io, dict_output)
     end
 
     #save optimized metasurface parameters (geoms)
-    geoms_filename = "$directory/geoms_multifocal_lens_$(opt_id).csv"
+    geoms_filename = "$directory/geoms_$(opt_id).csv"
     writedlm( geoms_filename,  mingeoms,',')
 
     #process opt
@@ -323,7 +326,7 @@ function design_multifocal_lens(pname, presicion, parallel, opt_date)
 end
 
 
-function design_achromatic_lens(pname, presicion, parallel, opt_date)
+function design_achromatic_lens(pname, presicion, parallel, opt_date, maxeval = 1000, xtol_rel = 1e-8, ineq_tol = 1e-8)
     params = get_params(pname, presicion)
     pp = params.pp
     imgp = params.imgp
@@ -332,7 +335,7 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date)
     lblambda = pp.wavcen / pp.ubfreq 
     ublambda = pp.wavcen / pp.lbfreq 
     unit_cell_length = pp.wavcen * pp.cellL
-    opt_id = "$(opt_date)_achromatic_lens_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)"
+    opt_id = "$(opt_date)_achromatic_lens_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)_$(maxeval)_$(xtol_rel)_$(ineq_tol)"
     directory = @sprintf("ImagingOpt.jl/geomsoptdata/%s", opt_id)
     Base.Filesystem.mkdir( directory )
     
@@ -417,10 +420,10 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date)
     opt.upper_bounds = [fill(pp.ubwidth,pp.gridL^2); Inf]
     opt.max_objective = myfunc
     for iF = 1:nF
-        inequality_constraint!(opt, (x,grad) -> myconstraint(x, grad, iF), 1e-8)
+        inequality_constraint!(opt, (x,grad) -> myconstraint(x, grad, iF), ineq_tol)
     end
-    opt.xtol_rel = 1e-8
-    opt.maxeval = 500
+    opt.xtol_rel = xtol_rel
+    opt.maxeval = maxeval
 
     (maxf,maxx,ret) = NLopt.optimize(opt, x_init)
     mingeoms = maxx[1:end-1]
@@ -429,14 +432,14 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date)
     flush(stdout)
 
     #save output data in json file
-    dict_output = Dict("return_value?" => ret)
+    dict_output = Dict("return_value?" => ret, "maxeval" => maxeval, "xtol_rel" => xtol_rel, "ineq_tol" => ineq_tol )
     output_data_filename = "$directory/output_data_$opt_date.json"
     open(output_data_filename,"w") do io
         JSON3.pretty(io, dict_output)
     end
 
     #save optimized metasurface parameters (geoms)
-    geoms_filename = "$directory/geoms_achromatic_lens_$(opt_id).csv"
+    geoms_filename = "$directory/geoms_$(opt_id).csv"
     writedlm( geoms_filename,  mingeoms,',')
 
     #process opt
@@ -489,7 +492,7 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date)
 
 end
 
-function design_singlefreq_lens(pname, presicion, parallel, opt_date)
+function design_singlefreq_lens(pname, presicion, parallel, opt_date, outer_iterations=1000, inner_iterations=1, line_search_iterations=1)
     params = get_params(pname, presicion)
     pp = params.pp
     imgp = params.imgp
@@ -498,7 +501,7 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     lblambda = pp.wavcen / pp.ubfreq 
     ublambda = pp.wavcen / pp.lbfreq 
     unit_cell_length = pp.wavcen * pp.cellL
-    opt_id = "$(opt_date)_singlefreq_lens_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)"
+    opt_id = "$(opt_date)_singlefreq_lens_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)_$(outer_iterations)_$(inner_iterations)_$(line_search_iterations)"
     directory = @sprintf("ImagingOpt.jl/geomsoptdata/%s", opt_id)
     Base.Filesystem.mkdir( directory )
     
@@ -529,25 +532,28 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     psfL = imgp.objL + imgp.imgL
     middle = div(psfL,2)
 
-    function objective(geoms_flat)
+    function objective(geoms_flat, save=true)
         geoms_grid = reshape(geoms_flat, pp.gridL, pp.gridL)
         PSF = get_PSF(freq, surrogate, pp, imgp, geoms_grid, plan_nearfar, parallel)
         obj = -1*(PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1])
     
-        @ignore_derivatives open(file_save_objective_vals, "a") do io
-            writedlm(io, obj, ',')
+        if save
+            @ignore_derivatives open(file_save_objective_vals, "a") do io
+                writedlm(io, obj, ',')
+            end
         end
     
         obj
     end
 
     function grad!(grad::Vector, parameters::Vector)
-        grad[1:end] = Zygote.gradient(objective, parameters)[1]
+    grad[1:end] = Zygote.gradient(geoms_flat -> objective(geoms_flat, false), parameters)[1]
     end
 
-    options = Optim.Options(time_limit = 36000)
-    method = Fminbox(Optim.LBFGS(m=10, linesearch=LineSearches.BackTracking(iterations=1) ))
-    ret_optim = Optim.optimize(objective, grad!, [pp.lbwidth for _ in 1:pp.gridL^2], [pp.ubwidth for _ in 1:pp.gridL^2], geoms_init, method, options)
+    #options = Optim.Options(time_limit = time_limit)
+    options = Optim.Options(outer_iterations=outer_iterations, iterations=inner_iterations)
+    method = Fminbox(Optim.LBFGS(m=10, linesearch=LineSearches.BackTracking(iterations=line_search_iterations) ))
+    ret_optim = Optim.optimize(geoms_flat -> objective(geoms_flat, true), grad!, [pp.lbwidth for _ in 1:pp.gridL^2], [pp.ubwidth for _ in 1:pp.gridL^2], geoms_init, method, options)
 
     println(ret_optim)
     flush(stdout)
@@ -558,7 +564,7 @@ function design_singlefreq_lens(pname, presicion, parallel, opt_date)
     iterations = Optim.iterations(ret_optim)
 
     #save output data in json file
-    dict_output = Dict("f_converged?" => f_converged, "iteration_limit_reached?" => iteration_limit_reached, "num_iterations" => iterations)
+    dict_output = Dict("f_converged?" => f_converged, "iteration_limit_reached?" => iteration_limit_reached, "num_iterations_completed" => iterations, "num_iterations_input" => outer_iterations, "num_inner_iterations_input" => inner_iterations, "num_line_search_iterations_input" => line_search_iterations)
     output_data_filename = "$directory/output_data_$opt_date.json"
     open(output_data_filename,"w") do io
         JSON3.pretty(io, dict_output)
@@ -771,6 +777,9 @@ function run_opt(pname, presicion, parallel, opt_date)
         write(io, "Default maxiter = $(imgp.objL^2); set to maxiter = $(optp.cg_maxiter_factor * imgp.objL^2) \n")
     end
     
+    #file for saving best geoms
+    geoms_filename = "$directory/geoms_optimized_$opt_date.csv"
+    
     opt = Optimisers.ADAM(optp.η)
     setup = Optimisers.setup(opt, params_opt)
 
@@ -819,6 +828,12 @@ function run_opt(pname, presicion, parallel, opt_date)
         open(file_save_cg_iters, "a") do io
             writedlm(io, num_cg_iters_list,',')
         end
+        
+        #save geoms every optp.saveeval iterations
+        if mod(iter, optp.saveeval) == 0
+            writedlm( geoms_filename,  params_opt_best[1:end-1] ,',')
+            writedlm( "$directory/geoms_iter_$(iter)_$opt_date.csv",  params_opt_best[1:end-1],',')
+        end
     
         setup, params_opt = Optimisers.update(setup, params_opt, grad)
         params_opt[1:end-1] = (x -> clamp(x, pp.lbwidth, pp.ubwidth)).(params_opt[1:end-1])
@@ -836,7 +851,6 @@ function run_opt(pname, presicion, parallel, opt_date)
     end
     
     #save optimized metasurface parameters (geoms)
-    geoms_filename = "$directory/geoms_$opt_date.csv"
     writedlm( geoms_filename,  mingeoms,',')
 
     opt_id
@@ -929,8 +943,13 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     
     plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α_init, parallel, iqi, "initial", "MIT")
     
+    #reconstruction with different alpha values, random and MIT Tmaps, 2% noise
+    plot_reconstruction_different_alpha_vals(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], imgp.noise_level, plan_nearfar, plan_PSF, weights, fftPSFs_init, [1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100], parallel, iqi, "initial", "random")
+    
+    plot_reconstruction_different_alpha_vals(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, imgp.noise_level, plan_nearfar, plan_PSF, weights, fftPSFs_init, [1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100], parallel, iqi, "initial", "MIT")
+    
     ################################# OPTIMIZED geoms, alpha, and PSFs #################################
-    geoms_filename = "$directory/geoms_$opt_date.csv"
+    geoms_filename = "$directory/geoms_optimized_$opt_date.csv"
     geoms_optimized = reshape(readdlm(geoms_filename,','),pp.gridL, pp.gridL )
     if parallel
         fftPSFs_optimized = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_optimized, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
@@ -975,7 +994,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     imshow(geoms_optimized)
     colorbar()
     title("optimized metasurface \n parameters")
-    savefig("$directory/geoms_$opt_date.png")
+    savefig("$directory/geoms_optimized_$opt_date.png")
     
     ################################# get transmissions for initial and optimized metasurface #################################
     get_fftPSF_freespace_iF = iF->get_fftPSF_freespace(freqs[iF], surrogates[iF], pp, imgp, plan_nearfar, plan_PSF)
@@ -1235,6 +1254,64 @@ function plot_reconstruction_fixed_noise_levels(opt_date, directory, params, fre
         writedlm(io, [noise_levels, MSEs],',')
     end
 end
+
+
+function plot_reconstruction_different_alpha_vals(opt_date, directory, params, freqs, Tinit_flat, Tmap, noise_level, plan_nearfar, plan_PSF, weights, fftPSFs, alpha_vals, parallel, iqi, geoms_type, Tmap_type)
+    pp = params.pp
+    imgp = params.imgp
+    optp = params.optp
+    recp = params.recp
+    
+    B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+    num_alpha_vals = length(alpha_vals)
+    
+    MSEs = Vector{Float64}(undef, num_alpha_vals)
+    
+    figure(figsize=(18,3.5*num_alpha_vals))
+    suptitle("$(Tmap_type) reconstruction with different alpha values ($(geoms_type)). noise level = $(noise_level * 100)%")
+    for i = 1:num_alpha_vals
+        α = alpha_vals[i]
+        noise = noise_level .* randn(imgp.imgL, imgp.imgL)
+        image_Tmap_grid = make_image(pp, imgp, true, B_Tmap_grid, fftPSFs, freqs, weights, noise, 0, plan_nearfar, plan_PSF, parallel);
+        Test_flat, _ = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
+        Test = reshape(Test_flat, imgp.objL, imgp.objL)
+        
+        subplot(num_alpha_vals, 5, i*5 - 4)
+        imshow(Tmap, vmin = minimum(Tmap), vmax = maximum(Tmap))
+        colorbar()
+        title(L"T(x,y)")
+    
+        subplot(num_alpha_vals, 5, i*5 - 3)
+        imshow(Test, vmin = minimum(Tmap), vmax = maximum(Tmap))
+        colorbar()
+        title(L"T_{est}(x,y)")
+    
+        subplot(num_alpha_vals, 5, i*5 - 2 )
+        imshow( (Test .- Tmap)./Tmap .* 100)
+        colorbar()
+        MSE = sum((Tmap .- Test).^2) / sum(Tmap.^2)
+        MSEs[i] = MSE
+        title("% difference \n MSE = $(round(MSE, digits=6))")
+        
+        ssim_map = ImageQualityIndexes._ssim_map(iqi, Tmap, Test )
+        subplot(num_alpha_vals, 5, i*5 - 1  )
+        imshow( ssim_map )
+        colorbar()
+        title("SSIM \n mean = $( round(mean(ssim_map),digits=6)  )")
+        
+        subplot(num_alpha_vals, 5, i*5)
+        imshow(image_Tmap_grid)
+        colorbar()
+        title("image. α = $(@sprintf "%.4e" α )")
+    end
+    tight_layout()
+    savefig("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_noise_$(noise_level)_different_alpha_vals_$(opt_date).png")
+    
+    open("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_noise_$(noise_level)_different_alpha_vals_MSEs_$(opt_date).csv", "w") do io
+        writedlm(io, [alpha_vals, MSEs],',')
+    end
+end
+
 
 function plot_PSFs(opt_date, directory, params, freqs, surrogates, plan_nearfar, geoms, parallel, geoms_type)
     pp = params.pp

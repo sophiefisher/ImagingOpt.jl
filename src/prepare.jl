@@ -77,6 +77,7 @@ struct OptimizeParams{FloatType <: AbstractFloat, IntType <: Signed}
     αinit::FloatType
     α_scaling::FloatType
     maxeval::IntType
+    saveeval::IntType
     xtol_rel::FloatType
     cg_maxiter_factor::IntType
     optimize_alpha::Bool
