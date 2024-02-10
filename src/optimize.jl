@@ -665,12 +665,16 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
     num_cg_iters_list = Matrix{Float64}(undef, 1, imgp.objN)
     ret_vals = Matrix{String}(undef, 1, imgp.objN)
     num_evals_list = Matrix{Float64}(undef, 1, imgp.objN)
+    relative_noise_levels = Matrix{Float64}(undef, 1, imgp.objN)
     for obji = 1:imgp.objN
         Tmap = Tmaps[obji]
         noise = noises[obji]
         B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
-
-        image_Tmap_grid = make_image(pp, imgp, imgp.differentiate_noise, B_Tmap_grid, fftPSFs, freqs, weights, noise, noise_multiplier, plan_nearfar, plan_PSF, parallel);
+        
+        image_Tmap_grid_noiseless = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+        relative_noise_level = imgp.noise_level * noise_multiplier / mean(image_Tmap_grid_noiseless) * 100
+        relative_noise_levels[obji] = relative_noise_level
+        image_Tmap_grid = add_noise_to_image(image_Tmap_grid_noiseless, imgp.differentiate_noise, noise, noise_multiplier)
 
         Test_flat, ret_val, num_evals = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel, false, false)
         ret_vals[obji] = ret_val
@@ -684,7 +688,7 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
         
         grad = grad + (1/imgp.objN) * grad_obji
     end
-    objective, grad, num_cg_iters_list, ret_vals, num_evals_list
+    objective, grad, num_cg_iters_list, ret_vals, num_evals_list, relative_noise_levels
 end
 
 
@@ -772,6 +776,9 @@ function run_opt(pname, presicion, parallel, opt_date)
 
     #file for saving number of function evals for reconstructions
     file_reconstruction_num_evals = "$directory/reconstruction_num_function_evals_$opt_date.csv"
+    
+    #file for saving relative noise_levels for each image
+    file_relative_noise_levels = "$directory/relative_noise_levels_$opt_date.csv"
 
     #file for saving conjugate gradient solve iterations
     file_save_cg_iters = "$directory/cg_iters_$opt_date.csv"
@@ -782,6 +789,12 @@ function run_opt(pname, presicion, parallel, opt_date)
     #file for saving best geoms
     geoms_filename = "$directory/geoms_optimized_$opt_date.csv"
     
+    #folder for saving geoms at intermediate iterations
+    geoms_directory = "$directory/more_geoms"
+    if ! isdir(geoms_directory)
+        Base.Filesystem.mkdir(geoms_directory)
+    end
+    
     opt = Optimisers.ADAM(optp.η)
     setup = Optimisers.setup(opt, params_opt)
 
@@ -791,7 +804,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     println("######################### beginning optimization #########################")
     println()
     for iter in 1:optp.maxeval
-        @time objective, grad, num_cg_iters_list, ret_vals, num_evals_list = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel)
+        @time objective, grad, num_cg_iters_list, ret_vals, num_evals_list, relative_noise_levels = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel)
     
         if objective < obj_best
             obj_best = objective
@@ -815,6 +828,11 @@ function run_opt(pname, presicion, parallel, opt_date)
                 writedlm(io, α, ',')
             end
         end
+        
+        #save number of conjugate gradient solve iterations 
+        open(file_save_cg_iters, "a") do io
+            writedlm(io, num_cg_iters_list,',')
+        end
     
         #save return value of reconstruction
         open(file_reconstruction_ret_vals, "a") do io
@@ -825,26 +843,27 @@ function run_opt(pname, presicion, parallel, opt_date)
         open(file_reconstruction_num_evals, "a") do io
             writedlm(io, num_evals_list,',')
         end
-    
-        #save number of conjugate gradient solve iterations 
-        open(file_save_cg_iters, "a") do io
-            writedlm(io, num_cg_iters_list,',')
+        
+        #save relative noise values for all images
+        open(file_relative_noise_levels, "a") do io
+            writedlm(io, relative_noise_levels,',')
         end
         
         #save geoms every optp.saveeval iterations
         if mod(iter, optp.saveeval) == 0
             writedlm( geoms_filename,  params_opt_best[1:end-1] ,',')
-            writedlm( "$directory/geoms_iter_$(iter)_$opt_date.csv",  params_opt_best[1:end-1],',')
+            writedlm( "$(geoms_directory)/geoms_iter_$(iter)_$opt_date.csv",  params_opt_best[1:end-1],',')
         end
     
         setup, params_opt = Optimisers.update(setup, params_opt, grad)
         params_opt[1:end-1] = (x -> clamp(x, pp.lbwidth, pp.ubwidth)).(params_opt[1:end-1])
-        params_opt[end] = clamp(params_opt[end], 0,Inf)
+        params_opt[end] = clamp(params_opt[end], 1e-6, Inf)
     end
     println()
 
     mingeoms = params_opt_best[1:end-1]
     println("######################### MAX EVAL REACHED #########################")
+    println()
     dict_output = Dict("return_val" => "MAXEVAL_REACHED")
     #save output data in json file
     output_data_filename = "$directory/output_data_$opt_date.json"

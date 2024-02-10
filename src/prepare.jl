@@ -155,7 +155,7 @@ end
 #TODO: have function (prepare_physics?) to process PhysicsParams into unit-less parameters, and provide center wavelength
 function prepare_incident(pp::PhysicsParams,freq::AbstractFloat)
     if pp.in_air == "True"
-        incident = incident_field(pp.depth, freq, convert(typeof(freq),1), pp.gridL, pp.cellL)
+        incident = incident_field(pp.depth, freq, 1, pp.gridL, pp.cellL)
     else
         ϵsubfunc = permittivity(pp.materialsub,pp)
         ϵsub = ϵsubfunc(freq) 

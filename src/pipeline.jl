@@ -90,11 +90,8 @@ function make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, pl
         
     image_Tmap_grid_noiseless
 end
-
-function make_image(pp, imgp, differentiate_noise, B_Tmap_grid, fftPSFs, freqs, weights, noise, noise_multiplier, plan_nearfar, plan_PSF, parallel::Bool=true)
-    image_Tmap_grid_noiseless = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
     
-    #add noise 
+function add_noise_to_image(image_Tmap_grid_noiseless, differentiate_noise, noise, noise_multiplier)
     if differentiate_noise
         image_Tmap_grid = image_Tmap_grid_noiseless .+ mean(image_Tmap_grid_noiseless).*noise
     else
@@ -102,6 +99,11 @@ function make_image(pp, imgp, differentiate_noise, B_Tmap_grid, fftPSFs, freqs, 
     end
         
     image_Tmap_grid
+end
+
+function make_image(pp, imgp, differentiate_noise, B_Tmap_grid, fftPSFs, freqs, weights, noise, noise_multiplier, plan_nearfar, plan_PSF, parallel::Bool=true)
+    image_Tmap_grid_noiseless = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    image_Tmap_grid = add_noise_to_image(image_Tmap_grid_noiseless, differentiate_noise, noise, noise_multiplier)
 end
 
 
