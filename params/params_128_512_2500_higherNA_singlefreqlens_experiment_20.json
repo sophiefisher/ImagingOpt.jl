@@ -47,21 +47,21 @@
         "geoms_init_type":"load",
         "geoms_init_loadfilename":"geoms_2024-02-03T19_37_01.604_singlefreq_lens_8.0_14.0_20_4.0_2500_640_128_512_3_500_1_1.csv",
         "geoms_init_loadsavename":"singlefreq_lens",
-        "αinit":1e-5,
+        "αinit":1e-3,
         "α_scaling":1,
         "maxeval":6000,
-        "saveeval":300,
+        "saveeval":100,
         "xtol_rel":0,
         "cg_maxiter_factor":4,
         "optimize_alpha":true,
-        "η": 1e-3
+        "η": 1e-4
         
     },
     "recp": {
         "T_init_type":"uniform",
-        "T_init_uniform_val":295,
+        "T_init_uniform_val":443.15,
         "ftol_rel":1e-10,
         "geoms_init_savefilestring":"minimax_1.00e-06_500",
-        "subtract_reg":295
+        "subtract_reg":443.15
     }
 }
