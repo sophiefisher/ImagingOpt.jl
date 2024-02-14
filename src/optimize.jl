@@ -170,7 +170,7 @@ function design_multifocal_lens(pname, presicion, parallel, opt_date, maxeval = 
     directory = @sprintf("ImagingOpt.jl/geomsoptdata/%s", opt_id)
     Base.Filesystem.mkdir( directory )
     
-    #save input paoptimizerameters in json file
+    #save input parameters in json file
     jsonread = JSON3.read(read("$PARAMS_DIR/$pname.json", String))
     open("$directory/$(pname)_$(opt_date).json", "w") do io
         JSON3.pretty(io, jsonread)
@@ -857,7 +857,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     
         setup, params_opt = Optimisers.update(setup, params_opt, grad)
         params_opt[1:end-1] = (x -> clamp(x, pp.lbwidth, pp.ubwidth)).(params_opt[1:end-1])
-        params_opt[end] = clamp(params_opt[end], 1e-6, Inf)
+        params_opt[end] = clamp(params_opt[end], 1e-7, Inf)
     end
     println()
 
