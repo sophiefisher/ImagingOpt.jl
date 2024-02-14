@@ -157,6 +157,167 @@ function compute_system_params(pp, imgp)
 end
 
 
+function design_polychromatic_lens(pname, presicion, parallel, opt_date, maxeval = 1000, xtol_rel = 1e-8, ineq_tol = 1e-8)
+    #assumes there are 21 PSFs!
+    
+    params = get_params(pname, presicion)
+    pp = params.pp
+    imgp = params.imgp
+    
+    lblambda = pp.wavcen / pp.ubfreq 
+    ublambda = pp.wavcen / pp.lbfreq 
+    unit_cell_length = pp.wavcen * pp.cellL
+    opt_id = "$(opt_date)_polychromatic_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)_$(maxeval)_$(xtol_rel)_$(ineq_tol)"
+    directory = @sprintf("ImagingOpt.jl/geomsoptdata/%s", opt_id)
+    Base.Filesystem.mkdir( directory )
+    
+    #save input parameters in json file
+    jsonread = JSON3.read(read("$PARAMS_DIR/$pname.json", String))
+    open("$directory/$(pname)_$(opt_date).json", "w") do io
+        JSON3.pretty(io, jsonread)
+    end
+
+    println("######################### params loaded #########################")
+    println()
+    flush(stdout)
+    print_params(pp, imgp, params.optp, params.recp, true, true, false, false)
+    flush(stdout)
+
+    #file for saving objective vals
+    file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"  
+
+    surrogates, freqs = prepare_surrogate(pp)
+    plan_nearfar, _ = prepare_fft_plans(pp, imgp)
+    geoms_init = fill((pp.lbwidth + pp.ubwidth)/2, pp.gridL^2)
+
+    psfL = imgp.objL + imgp.imgL
+    middle = div(psfL,2)
+    nF = pp.orderfreq + 1
+    
+    middle_freq_idx = 11
+    freqs_idx_1 = 1
+    freq_idx_2 = 8
+    freq_idx_3 = 14
+    freq_idx_4 = 21
+    freq_idx_list = [freqs_idx_1, freq_idx_2, freq_idx_3, freq_idx_4, middle_freq_idx]
+    
+    offset = Int(floor(3*div(imgp.imgL,8)))
+    xoffsets = [-offset, 0, offset, 0, 0]
+    yoffsets = [0, -offset, 0, offset, 0]
+    
+    function get_PSF_offset_center(freq, surrogate, geoms, xoffset, yoffset)
+        PSF = get_PSF(freq, surrogate, pp, imgp, geoms, plan_nearfar, parallel)
+        PSF[middle + yoffset, middle + xoffset] + PSF[middle+1+ yoffset,middle+ xoffset] + PSF[middle+ yoffset,middle+1+ xoffset] + PSF[middle+1+ yoffset,middle+1+ xoffset]
+    end
+    
+    t_init = minimum(1:length(freq_idx_list)) do i
+        idx = freq_idx_list[i]
+        offset_center = get_PSF_offset_center(freqs[idx], surrogates[idx], reshape(geoms_init,pp.gridL,pp.gridL), xoffsets[i], yoffsets[i])
+    end
+    x_init = [geoms_init[:]; t_init]
+
+    function myfunc(x::Vector, grad::Vector)
+        if length(grad) > 0
+            grad[1:end-1] = zeros( pp.gridL^2)
+            grad[end] = 1
+        end
+
+        open(file_save_objective_vals, "a") do io
+            writedlm(io, x[end], ',')
+        end
+
+        x[end]
+    end
+
+    function myconstraint(x::Vector, grad::Vector, i)
+        idx = freq_idx_list[i]
+        geoms_grid = reshape(x[1:end-1], pp.gridL, pp.gridL)
+        constraint = g -> get_PSF_offset_center(freqs[idx], surrogates[idx], g, xoffsets[i], yoffsets[i])
+        if length(grad) > 0
+            grad[end] = 1
+            grad_grid = -1 * Zygote.gradient( constraint, geoms_grid )[1]
+            grad[1:end-1] = grad_grid[:]
+        end
+        x[end] - constraint(geoms_grid)
+    end
+
+    opt = Opt(:LD_MMA, pp.gridL^2 + 1)
+    opt.lower_bounds = [fill(pp.lbwidth,pp.gridL^2); -Inf]
+    opt.upper_bounds = [fill(pp.ubwidth,pp.gridL^2); Inf]
+    opt.max_objective = myfunc
+    for i = 1:length(freq_idx_list)
+        inequality_constraint!(opt, (x,grad) -> myconstraint(x, grad, i), ineq_tol)
+    end
+    opt.xtol_rel = xtol_rel
+    opt.maxeval = maxeval
+
+    (maxf,maxx,ret) = NLopt.optimize(opt, x_init)
+    mingeoms = maxx[1:end-1]
+
+    println(ret)
+    flush(stdout)
+
+    #save output data in json file
+    dict_output = Dict("return_value?" => ret, "maxeval" => maxeval, "xtol_rel" => xtol_rel, "ineq_tol" => ineq_tol)
+    output_data_filename = "$directory/output_data_$opt_date.json"
+    open(output_data_filename,"w") do io
+        JSON3.pretty(io, dict_output)
+    end
+
+    #save optimized metasurface parameters (geoms)
+    geoms_filename = "$directory/geoms_$(opt_id).csv"
+    writedlm( geoms_filename,  mingeoms,',')
+
+    #process opt
+    geoms = reshape(mingeoms, pp.gridL, pp.gridL)
+
+    #plot objective values
+    objdata = readdlm(file_save_objective_vals,',')
+    figure(figsize=(20,6))
+    suptitle("objective data")
+    subplot(1,2,1)
+    plot(objdata,".-")
+    subplot(1,2,2)
+    semilogy(abs.(objdata),".-")
+    tight_layout()
+    savefig("$directory/objective_vals_$opt_date.png")
+
+    #plot geoms
+    figure(figsize=(16,5))
+    subplot(1,3,1)
+    imshow( reshape(geoms_init, pp.gridL, pp.gridL) , vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("initial metasurface \n parameters")
+    subplot(1,3,2)
+    imshow(geoms, vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    subplot(1,3,3)
+    imshow(geoms)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    savefig("$directory/geoms_$(opt_id).png")
+
+    #plot PSFs (make sure there are only 21 of them)
+    if parallel
+        PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    else
+        PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    end
+    figure(figsize=(20,9))
+    for i = 1:21
+        subplot(3,7,i)
+        imshow(PSFs[i])
+        colorbar()
+        title("PSF for ν = $(round(freqs[i],digits=3) )")
+    end
+    tight_layout()
+    savefig("$directory/PSFs_$opt_date.png")
+
+    geoms
+end
+
+
 function design_multifocal_lens(pname, presicion, parallel, opt_date, maxeval = 1000, xtol_rel = 1e-8, ineq_tol = 1e-8)
     params = get_params(pname, presicion)
     pp = params.pp
