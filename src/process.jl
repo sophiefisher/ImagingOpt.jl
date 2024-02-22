@@ -16,11 +16,6 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
         Base.Filesystem.mkdir(PSFs_directory)
     end
     
-    strehl_ratios_directory = "ImagingOpt.jl/optdata/$opt_id/strehl_ratios"
-    if ! isdir(strehl_ratios_directory)
-        Base.Filesystem.mkdir(strehl_ratios_directory)
-    end
-    
     params = get_params("$(pname)_$(opt_date)", presicion, directory)
     pp = params.pp
     imgp = params.imgp
@@ -50,21 +45,30 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     
     file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"
     objdata = readdlm(file_save_objective_vals,',')
-    figure(figsize=(22,10))
+    figure(figsize=(18,10))
     suptitle(L"\mathrm{objective \  data } ,  \langle \frac{|| T - T_{est} ||^2}{  || T ||^2} \rangle_{T}")
     subplot(2,2,1)
     plot(objdata,".-")
+    xlabel("iteration")
+    title("objective values")
 
     subplot(2,2,2)
     semilogy(objdata,".-")
+    xlabel("iteration")
+    title("objective values (semilog plot)")
 
     file_save_best_objective_vals = "$directory/best_objective_vals_$opt_date.csv"
     objdata_best = readdlm(file_save_best_objective_vals,',')
     subplot(2,2,3)
     plot(objdata_best,".-",color="orange")
+    xlabel("iteration")
+    title("best objective values")
 
     subplot(2,2,4)
     semilogy(objdata_best,".-",color="orange")
+    xlabel("iteration")
+    title("best objective values (semilog plot)")
+    
     tight_layout()
     savefig("$directory/objective_vals_$opt_date.png")
     
@@ -72,13 +76,30 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
         file_save_alpha_vals = "$directory/alpha_vals_$opt_date.csv"   
         alpha_vals = readdlm(file_save_alpha_vals,',')
         
-        figure(figsize=(20,6))
+        figure(figsize=(18,10))
         suptitle(L"\alpha \ \mathrm{values }")
-        subplot(1,2,1)
+        subplot(2,2,1)
         plot(alpha_vals,".-")
+        xlabel("iteration")
+        title("alpha values")
 
-        subplot(1,2,2)
+        subplot(2,2,2)
         semilogy(alpha_vals,".-")
+        xlabel("iteration")
+        title("alpha values (semilog plot)")
+        
+        file_save_best_alpha_vals = "$directory/best_alpha_vals_$opt_date.csv"   
+        best_alpha_vals = readdlm(file_save_best_alpha_vals,',')
+        subplot(2,2,3)
+        plot(best_alpha_vals,".-",color="orange")
+        xlabel("iteration")
+        title("best alpha values")
+
+        subplot(2,2,4)
+        semilogy(best_alpha_vals,".-",color="orange")
+        xlabel("iteration")
+        title("best alpha values (semilog plot)")
+        
         tight_layout()
         savefig("$directory/alpha_vals_$opt_date.png")
     end
@@ -150,10 +171,14 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     
     plot_reconstruction_fixed_noise_levels(opt_date, MIT_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α_init, parallel, iqi, "initial", "MIT")
     
-    #reconstruction with different alpha values, random and MIT Tmaps, 2% noise
+    #reconstruction with different alpha values, random and MIT Tmaps, imgp.noise_level noise and 10% noise
     plot_reconstruction_different_alpha_vals(opt_date, random_reconstructions_directory, params, freqs, Tinit_flat, Tmaps_random[1], imgp.noise_level, plan_nearfar, plan_PSF, weights, fftPSFs_init, [1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100], parallel, iqi, "initial", "random")
     
     plot_reconstruction_different_alpha_vals(opt_date, MIT_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, imgp.noise_level, plan_nearfar, plan_PSF, weights, fftPSFs_init, [1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100], parallel, iqi, "initial", "MIT")
+    
+    plot_reconstruction_different_alpha_vals(opt_date, random_reconstructions_directory, params, freqs, Tinit_flat, Tmaps_random[1], 0.10, plan_nearfar, plan_PSF, weights, fftPSFs_init, [1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100], parallel, iqi, "initial", "random")
+    
+    plot_reconstruction_different_alpha_vals(opt_date, MIT_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, 0.10, plan_nearfar, plan_PSF, weights, fftPSFs_init, [1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100], parallel, iqi, "initial", "MIT")
     
     ################################# OPTIMIZED geoms, alpha, and PSFs #################################
     println("######################### plotting optimized PSFs, reconstructions #########################")
@@ -183,7 +208,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     =#
     
     if optp.optimize_alpha
-        α_optimized = alpha_vals[end]
+        α_optimized = best_alpha_vals[end]
     else
         α_optimized = optp.αinit
     end
@@ -222,7 +247,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     println("######################### plotting geoms #########################")
     println()
     
-    figure(figsize=(16,5))
+    figure(figsize=(18,8))
     subplot(1,3,1)
     imshow( geoms_init , vmin = pp.lbwidth, vmax = pp.ubwidth)
     colorbar()
@@ -274,7 +299,9 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     
     transmission_relative_to_no_lens_optimized = get_transmission_relative_to_no_lens(pp, imgp, Tmaps_random[1], fftPSFs_freespace, fftPSFs_optimized, freqs, weights, plan_nearfar, plan_PSF, parallel)
     
-    dict_output_optimized = Dict("transmission_relative_to_no_lens" => transmission_relative_to_no_lens_optimized)
+    transmission_optimized_relative_to_initial = get_optimized_transmission_relative_to_initial(pp, imgp, Tmaps_random[1], fftPSFs_optimized, fftPSFs_init, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    
+    dict_output_optimized = Dict("transmission_relative_to_no_lens" => transmission_relative_to_no_lens_optimized, "transmission_relative_to_initial" => transmission_optimized_relative_to_initial)
     #save output data in json file
     output_data_filename = "$(directory)/transmissions_optimized.json"
     open(output_data_filename,"w") do io
@@ -295,6 +322,9 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 1, "same_linear")
     plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 1, "same_log")
     
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 1, "same_linear", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 1, "same_log", true)
+    
     plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 2, "same_linear")
     plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 2, "same_log")
     plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 4, "same_linear")
@@ -303,6 +333,15 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 8, "same_log")
     plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 16, "same_linear")
     plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 16, "same_log")
+    
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 2, "same_linear", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 2, "same_log", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 4, "same_linear", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 4, "same_log", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 8, "same_linear", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 8, "same_log", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 16, "same_linear", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_init, parallel, figure_plots_intial_directory, 16, "same_log", true)
     
     plot_Tmap_image_reconstruction_figures(pp, imgp, optp, recp, Tmap_MIT, α_init, fftPSFs_init, Tinit_flat, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, figure_plots_intial_directory, "MIT")
     plot_Tmap_image_reconstruction_figures(pp, imgp, optp, recp, Tmaps_random[1], α_init, fftPSFs_init, Tinit_flat, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, figure_plots_intial_directory, "random")
@@ -318,6 +357,9 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,1,"same_linear")
     plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,1,"same_log")
     
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,1,"same_linear", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,1,"same_log", true)
+    
     plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,2,"same_linear")
     plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,2,"same_log")
     plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,4,"same_linear")
@@ -327,6 +369,15 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,16,"same_linear")
     plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,16,"same_log")
     
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,2,"same_linear", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,2,"same_log", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,4,"same_linear", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,4,"same_log", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,8,"same_linear", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,8,"same_log", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,16,"same_linear", true)
+    plot_PSFs_figure(pp, imgp, freqs, PSFs_optimized, parallel, figure_plots_optimized_directory,16,"same_log", true)
+    
     plot_Tmap_image_reconstruction_figures(pp, imgp, optp, recp, Tmap_MIT, α_optimized, fftPSFs_optimized, Tinit_flat, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, figure_plots_optimized_directory, "MIT")
     plot_Tmap_image_reconstruction_figures(pp, imgp, optp, recp, Tmaps_random[1], α_optimized, fftPSFs_optimized, Tinit_flat, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, figure_plots_optimized_directory, "random")
     
@@ -334,104 +385,109 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     println("######################### plotting reconstructions for different temperature ranges #########################")
     println()
     
-    more_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/more_reconstructions"
-    if ! isdir(more_reconstructions_directory)
-        Base.Filesystem.mkdir(more_reconstructions_directory)
+    different_T_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/different_temperature_reconstructions"
+    if ! isdir(different_T_reconstructions_directory)
+        Base.Filesystem.mkdir(different_T_reconstructions_directory)
     end
     
     bg = (imgp.lbT + imgp.ubT)/2
     logo = imgp.lbT + (imgp.ubT - imgp.lbT)*(1/4)
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = (imgp.lbT + imgp.ubT)/2
     logo = imgp.ubT 
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = (imgp.lbT + imgp.ubT)/2
     logo = imgp.lbT 
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = imgp.lbT 
     logo = imgp.ubT 
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = (imgp.lbT + imgp.ubT)/2 - 1
     logo = (imgp.lbT + imgp.ubT)/2 + 1
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 263.15
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 280
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 296
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 300
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 310
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 443.15
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 623.15
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 263.15
     logo = 623.15
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 280
     logo = 310
     Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     lbT = 263.15
     ubT = 623.15
     Tmap_random = rand(lbT:eps():ubT,imgp.objL, imgp.objL)
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_random, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random_$(lbT)_$(ubT)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_random, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random_$(lbT)_$(ubT)")
     
     lbT = 280
     ubT = 310
     Tmap_random = rand(lbT:eps():ubT,imgp.objL, imgp.objL)
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_random, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random_$(lbT)_$(ubT)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_random, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random_$(lbT)_$(ubT)")
     
     lbT = 294
     ubT = 296
     Tmap_random = rand(lbT:eps():ubT,imgp.objL, imgp.objL)
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_random, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random_$(lbT)_$(ubT)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_random, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random_$(lbT)_$(ubT)")
     
     lbT = (imgp.lbT + imgp.ubT)/2 - 1
     ubT = (imgp.lbT + imgp.ubT)/2 + 1
     Tmap_random = rand(lbT:eps():ubT,imgp.objL, imgp.objL)
-    plot_reconstruction_fixed_noise_levels(opt_date, more_reconstructions_directory, params, freqs, Tinit_flat, Tmap_random, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random_$(lbT)_$(ubT)")
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_random, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random_$(lbT)_$(ubT)")
     
     ################################# calculating strehl ratios #################################
     println("######################### calculating strehl ratios #########################")
     println()
+    
+    strehl_ratios_directory = "ImagingOpt.jl/optdata/$opt_id/strehl_ratios"
+    if ! isdir(strehl_ratios_directory)
+        Base.Filesystem.mkdir(strehl_ratios_directory)
+    end
     
     psfL = imgp.objL + imgp.imgL
     middle = div(psfL,2)
@@ -442,9 +498,9 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
         PSFs_diff = map(iF->get_PSF_diffraction_limited(freqs[iF], pp, imgp, plan_nearfar),1:pp.orderfreq+1)
     end
     
-    plot_PSFs(opt_date, strehl_ratios_directory, params, freqs, PSFs_diff, parallel, "optimized",1,"different_linear")
-    plot_PSFs(opt_date, strehl_ratios_directory, params, freqs, PSFs_diff, parallel, "optimized",1,"same_linear")
-    plot_PSFs(opt_date, strehl_ratios_directory, params, freqs, PSFs_diff, parallel, "optimized",1,"same_log")
+    plot_PSFs(opt_date, strehl_ratios_directory, params, freqs, PSFs_diff, parallel, "ideal",1,"different_linear")
+    plot_PSFs(opt_date, strehl_ratios_directory, params, freqs, PSFs_diff, parallel, "ideal",1,"same_linear")
+    plot_PSFs(opt_date, strehl_ratios_directory, params, freqs, PSFs_diff, parallel, "ideal",1,"same_log")
 
     max_PSFs_diff = maximum.(PSFs_diff)
     max_PSFs_init = maximum.(PSFs_init)
@@ -454,17 +510,135 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     mid_PSFs_init = [(PSFs_init[iF][middle,middle] + PSFs_init[iF][middle+1,middle] + PSFs_init[iF][middle,middle+1] + PSFs_init[iF][middle+1,middle+1])/4 for iF in 1:pp.orderfreq + 1]
     mid_PSFs_optimized = [(PSFs_optimized[iF][middle,middle] + PSFs_optimized[iF][middle+1,middle] + PSFs_optimized[iF][middle,middle+1] + PSFs_optimized[iF][middle+1,middle+1])/4 for iF in 1:pp.orderfreq + 1]
     
-    strehl_ratios_init_max = max_PSFs_init ./ max_PSFs_diff
-    strehl_ratios_optimized_max = max_PSFs_optimized ./ max_PSFs_diff
+    absolute_strehl_ratios_init_max = max_PSFs_init ./ max_PSFs_diff
+    absolute_strehl_ratios_optimized_max = max_PSFs_optimized ./ max_PSFs_diff 
     
-    strehl_ratios_init_mid = mid_PSFs_init ./ mid_PSFs_diff
-    strehl_ratios_optimized_mid = mid_PSFs_optimized ./ mid_PSFs_diff
+    absolute_strehl_ratios_init_mid = mid_PSFs_init ./ mid_PSFs_diff
+    absolute_strehl_ratios_optimized_mid = mid_PSFs_optimized ./ mid_PSFs_diff
     
-    writedlm("$(strehl_ratios_directory)/strehl_ratios_init_max",  strehl_ratios_init_max,',')
-    writedlm("$(strehl_ratios_directory)/strehl_ratios_optimized_max",  strehl_ratios_optimized_max,',')
+    figure(figsize=(18,10))
+    subplot(2,2,1)
+    plot(1:length(freqs), absolute_strehl_ratios_init_max,".-")
+    plot(1:length(freqs), absolute_strehl_ratios_optimized_max,".-")
+    xticks(1:length(freqs), round.(freqs,digits=3), rotation=55 )
+    xlabel("frequency")
+    legend(["initial geometry","optimized geometry"])
+    title("absolute strehl ratio, max val")
     
-    writedlm("$(strehl_ratios_directory)/strehl_ratios_init_mid",  strehl_ratios_init_mid,',')
-    writedlm("$(strehl_ratios_directory)/strehl_ratios_optimized_mid",  strehl_ratios_optimized_mid,',')
+    subplot(2,2,2)
+    semilogy(1:length(freqs), absolute_strehl_ratios_init_max,".-")
+    semilogy(1:length(freqs), absolute_strehl_ratios_optimized_max,".-")
+    xticks(1:length(freqs), round.(freqs,digits=3), rotation=55 )
+    xlabel("frequency")
+    legend(["initial geometry","optimized geometry"])
+    title("absolute strehl ratio, max val (semilog plot)")
+    
+    subplot(2,2,3)
+    plot(1:length(freqs), absolute_strehl_ratios_init_mid,".-")
+    plot(1:length(freqs), absolute_strehl_ratios_optimized_mid,".-")
+    xticks(1:length(freqs), round.(freqs,digits=3), rotation=55 )
+    xlabel("frequency")
+    legend(["initial geometry","optimized geometry"])
+    title("absolute strehl ratio, middle val")
+    
+    subplot(2,2,4)
+    semilogy(1:length(freqs), absolute_strehl_ratios_init_mid,".-")
+    semilogy(1:length(freqs), absolute_strehl_ratios_optimized_mid,".-")
+    xticks(1:length(freqs), round.(freqs,digits=3), rotation=55 )
+    xlabel("frequency")
+    legend(["initial geometry","optimized geometry"])
+    title("absolute strehl ratio, middle val (semilog plot)")
+    
+    tight_layout()
+    savefig("$(strehl_ratios_directory)/absolute_strehl_ratios_$(opt_date).png")
+    
+    writedlm("$(strehl_ratios_directory)/absolute_strehl_ratios_init_max",  absolute_strehl_ratios_init_max,',')
+    writedlm("$(strehl_ratios_directory)/absolute_strehl_ratios_optimized_max",  absolute_strehl_ratios_optimized_max,',')
+    
+    writedlm("$(strehl_ratios_directory)/absolute_strehl_ratios_init_mid",  absolute_strehl_ratios_init_mid,',')
+    writedlm("$(strehl_ratios_directory)/absolute_strehl_ratios_optimized_mid",  absolute_strehl_ratios_optimized_mid,',')
+    
+    #midline PSF figures
+    plot_PSF_midlines(opt_date, strehl_ratios_directory, params, freqs, PSFs_diff, PSFs_init, "initial", "different_linear")
+    plot_PSF_midlines(opt_date, strehl_ratios_directory, params, freqs, PSFs_diff, PSFs_init, "initial", "same_linear")
+    plot_PSF_midlines(opt_date, strehl_ratios_directory, params, freqs, PSFs_diff, PSFs_init, "initial", "same_log")
+    
+    plot_PSF_midlines(opt_date, strehl_ratios_directory, params, freqs, PSFs_diff, PSFs_optimized, "optimized", "different_linear")
+    plot_PSF_midlines(opt_date, strehl_ratios_directory, params, freqs, PSFs_diff, PSFs_optimized, "optimized", "same_linear")
+    plot_PSF_midlines(opt_date, strehl_ratios_directory, params, freqs, PSFs_diff, PSFs_optimized, "optimized", "same_log")
+    
+    
+    #compute diffraction limits
+    mid_lines_diff = [PSFs_diff[i][middle, :] for i in 1:pp.orderfreq+1]
+    peak_FWHM_pixel_sizes = Matrix{Float64}(undef, 1, pp.orderfreq+1)
+    peak_FWHM_widths_μm = Matrix{Float64}(undef, 1, pp.orderfreq+1)
+    diffraction_limit_calculations = Matrix{Float64}(undef, 1, pp.orderfreq+1)
+    for i = 1:pp.orderfreq+1
+        pks, vals = Peaks.findmaxima(mid_lines_diff[i])
+        pks, proms = peakproms(pks, mid_lines_diff[i])
+        pks, widths, _, _ = peakwidths(pks, mid_lines_diff[i], proms)
+        idx = argmax(vals)
+        width = widths[idx]
+        peak_FWHM_pixel_sizes[i] = width
+        peak_FWHM_widths_μm[i] = width * pp.wavcen * pp.cellL * imgp.binL
+        diffraction_limit_calculations[i] = (pp.wavcen / freqs[i]) / (2*sin(atan( pp.gridL * pp.cellL / (2 * pp.F) )) )
+    end
+
+    data = [peak_FWHM_pixel_sizes; peak_FWHM_widths_μm; diffraction_limit_calculations]
+    header = ["FWHM pixel size", "FWHM width (microns)", "calculated diff lim"]
+    writedlm("$(strehl_ratios_directory)/diffraction_limits.csv",[header data],',')
+    
+    
+    ################################# reconstructions for noisy PSFs #################################
+    println("######################### plotting reconstructions for noisy PSFs #########################")
+    println()
+    
+    noisy_PSFs_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/noisy_PSFs_reconstructions"
+    if ! isdir(noisy_PSFs_reconstructions_directory)
+        Base.Filesystem.mkdir(noisy_PSFs_reconstructions_directory)
+    end
+    
+    #initial
+    plot_reconstruction_fixed_noise_levels_noisy_PSFs(opt_date, noisy_PSFs_reconstructions_directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, PSFs_init, α_init, parallel, iqi, "initial", "random")
+    
+    plot_reconstruction_fixed_noise_levels_noisy_PSFs(opt_date, noisy_PSFs_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, PSFs_init, α_init, parallel, iqi, "initial", "MIT")
+    
+    #optimized
+    plot_reconstruction_fixed_noise_levels_noisy_PSFs(opt_date, noisy_PSFs_reconstructions_directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, PSFs_optimized, α_optimized, parallel, iqi, "optimized", "random")
+    
+    plot_reconstruction_fixed_noise_levels_noisy_PSFs(opt_date, noisy_PSFs_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, PSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT")
+    
+    ################################# reconstructions for interpolated PSFs #################################
+    println("######################### plotting reconstructions for interpolated PSFs #########################")
+    println()
+    
+    interpolated_PSFs_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/interpolated_PSFs_reconstructions"
+    if ! isdir(interpolated_PSFs_reconstructions_directory)
+        Base.Filesystem.mkdir(interpolated_PSFs_reconstructions_directory)
+    end
+    
+    interpolated_PSFs_optimized_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/interpolated_PSFs_reconstructions/optimized"
+    if ! isdir(interpolated_PSFs_optimized_reconstructions_directory)
+        Base.Filesystem.mkdir(interpolated_PSFs_optimized_reconstructions_directory)
+    end
+    
+    interpolated_PSFs_initial_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/interpolated_PSFs_reconstructions/initial"
+    if ! isdir(interpolated_PSFs_initial_reconstructions_directory)
+        Base.Filesystem.mkdir(interpolated_PSFs_initial_reconstructions_directory)
+    end
+    
+    #initial
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_initial_reconstructions_directory, params, PSFs_init, freqs, [1; 11; 21], Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_init, parallel, iqi, "initial", "random")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_initial_reconstructions_directory, params, PSFs_init, freqs, [1; 11; 21], Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_init, parallel, iqi, "initial", "MIT")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_initial_reconstructions_directory, params, PSFs_init, freqs, [1; 8; 11; 14; 21], Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_init, parallel, iqi, "initial", "random")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_initial_reconstructions_directory, params, PSFs_init, freqs, [1; 8; 11; 14; 21], Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_init, parallel, iqi, "initial", "MIT")
+    
+    #optimized
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_optimized_reconstructions_directory, params, PSFs_optimized, freqs, [1; 11; 21], Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_optimized, parallel, iqi, "optimized", "random")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_optimized_reconstructions_directory, params, PSFs_optimized, freqs, [1; 11; 21], Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_optimized, parallel, iqi, "optimized", "MIT")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_optimized_reconstructions_directory, params, PSFs_optimized, freqs, [1; 8; 11; 14; 21], Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_optimized, parallel, iqi, "optimized", "random")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_optimized_reconstructions_directory, params, PSFs_optimized, freqs, [1; 8; 11; 14; 21], Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_optimized, parallel, iqi, "optimized", "MIT")
+    
 end
 
 function plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tmaps, noises, plan_nearfar, plan_PSF, weights, noise_multiplier, fftPSFs, α, parallel, iqi, geoms_type, Tmap_type)
@@ -572,13 +746,180 @@ function plot_reconstruction_fixed_noise_levels(opt_date, directory, params, fre
         colorbar()
         title("image \n noise level is $(noise_level * 100)%")
     end
-    tight_layout()
+    tight_layout(rect=[0, 0, 1, 0.99])
     savefig("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_$(@sprintf "%.4e" α )_fixed_noises_$(opt_date).png")
     
     open("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_$(@sprintf "%.4e" α )_fixed_noises_MSEs_$(opt_date).csv", "w") do io
         writedlm(io, [noise_levels, MSEs],',')
     end
 end
+
+
+function plot_reconstruction_fixed_noise_levels_noisy_PSFs(opt_date, directory, params, freqs, Tinit_flat, Tmap, noise_levels, plan_nearfar, plan_PSF, weights, PSFs, α, parallel, iqi, geoms_type, Tmap_type)
+    #assumes PSF noise is the same as image noise (relative to mean for both the image and the PSF)
+    pp = params.pp
+    imgp = params.imgp
+    optp = params.optp
+    recp = params.recp
+    psfL = imgp.objL + imgp.imgL
+    
+    #compute true fftPSFs
+    if parallel
+        fftPSFs = ThreadsX.map(iF-> PSF_to_fftPSF(PSFs[iF], plan_PSF),1:pp.orderfreq+1)
+    else
+        fftPSFs = map(iF-> PSF_to_fftPSF(PSFs[iF], plan_PSF),1:pp.orderfreq+1)
+    end
+    
+    B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+    num_noise_levels = length(noise_levels)
+    
+    MSEs = Vector{Float64}(undef, length(noise_levels))
+    
+    figure(figsize=(18,3.5*num_noise_levels))
+    suptitle("$(Tmap_type) reconstruction at fixed noise levels with noisy PSFs ($(geoms_type)). α = $(@sprintf "%.4e" α )")
+    for i = 1:num_noise_levels
+        noise_level = noise_levels[i]
+        noise = noise_level .* randn(imgp.imgL, imgp.imgL)
+        
+        #image gets formed with true PSFs
+        image_Tmap_grid = make_image(pp, imgp, true, B_Tmap_grid, fftPSFs, freqs, weights, noise, 0, plan_nearfar, plan_PSF, parallel);
+        
+        #get noisy PSFs/fftPSFs
+        noisy_PSFs = [PSFs[i] .+ (mean(PSFs[i]) .* noise_level .* randn(psfL, psfL)) for i in 1:pp.orderfreq+1]
+        #compute true fftPSFs
+        if parallel
+            noisy_fftPSFs = ThreadsX.map(iF-> PSF_to_fftPSF(noisy_PSFs[iF], plan_PSF),1:pp.orderfreq+1)
+        else
+            noisy_fftPSFs = map(iF-> PSF_to_fftPSF(noisy_PSFs[iF], plan_PSF),1:pp.orderfreq+1)
+        end
+        
+        #reconstruction is done with noisy PSFs
+        Test_flat, _ = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, noisy_fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
+        Test = reshape(Test_flat, imgp.objL, imgp.objL)
+        
+        subplot(num_noise_levels, 5, i*5 - 4)
+        imshow(Tmap, vmin = minimum(Tmap), vmax = maximum(Tmap))
+        colorbar()
+        title(L"T(x,y)")
+    
+        subplot(num_noise_levels, 5, i*5 - 3)
+        imshow(Test, vmin = minimum(Tmap), vmax = maximum(Tmap))
+        colorbar()
+        title(L"T_{est}(x,y)")
+    
+        subplot(num_noise_levels, 5, i*5 - 2 )
+        imshow( (Test .- Tmap)./Tmap .* 100)
+        colorbar()
+        MSE = sum((Tmap .- Test).^2) / sum(Tmap.^2)
+        MSEs[i] = MSE
+        title("% difference \n MSE = $(round(MSE, digits=6))")
+        
+        ssim_map = ImageQualityIndexes._ssim_map(iqi, Tmap, Test )
+        subplot(num_noise_levels, 5, i*5 - 1  )
+        imshow( ssim_map )
+        colorbar()
+        title("SSIM \n mean = $( round(mean(ssim_map),digits=6)  )")
+        
+        subplot(num_noise_levels, 5, i*5)
+        imshow(image_Tmap_grid)
+        colorbar()
+        title("image \n noise level is $(noise_level * 100)%")
+    end
+    tight_layout(rect=[0, 0, 1, 0.99])
+    savefig("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_$(@sprintf "%.4e" α )_fixed_noises_noisy_PSFs_$(opt_date).png")
+    
+    open("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_$(@sprintf "%.4e" α )_fixed_noises_noisy_PSFs_MSEs_$(opt_date).csv", "w") do io
+        writedlm(io, [noise_levels, MSEs],',')
+    end
+end
+
+
+function plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, directory, params, PSFs, freqs, idxs_have, Tinit_flat, Tmap, noise_levels, plan_nearfar, plan_PSF, weights, α, parallel, iqi, geoms_type, Tmap_type)
+    pp = params.pp
+    imgp = params.imgp
+    optp = params.optp
+    recp = params.recp
+    psfL = imgp.objL + imgp.imgL
+    
+    #compute true fftPSFs
+    if parallel
+        fftPSFs = ThreadsX.map(iF-> PSF_to_fftPSF(PSFs[iF], plan_PSF),1:pp.orderfreq+1)
+    else
+        fftPSFs = map(iF-> PSF_to_fftPSF(PSFs[iF], plan_PSF),1:pp.orderfreq+1)
+    end
+    
+    freqs_have = freqs[idxs_have]
+    PSFs_have = PSFs[idxs_have]
+
+    itp = interpolate((freqs_have,), PSFs_have, Gridded(Linear()))
+    PSFs_interpolated = [itp(freqs[i]) for i in 1:length(freqs)]
+    
+    #plot PSFs
+    plot_PSFs(opt_date, directory, params, freqs, PSFs_interpolated, parallel, "$(geoms_type)_interpolated_$(join(idxs_have,"_ "))", 1, "different_linear")
+    plot_PSFs(opt_date, directory, params, freqs, PSFs_interpolated, parallel, "$(geoms_type)_interpolated_$(join(idxs_have,"_ "))", 1, "same_linear")
+    plot_PSFs(opt_date, directory, params, freqs, PSFs_interpolated, parallel, "$(geoms_type)_interpolated_$(join(idxs_have,"_ "))", 1, "same_log")
+    
+    #compute interpolated fftPSFs
+    if parallel
+        fftPSFs_interpolated = ThreadsX.map(iF-> PSF_to_fftPSF(PSFs_interpolated[iF], plan_PSF),1:pp.orderfreq+1)
+    else
+        fftPSFs_interpolated = map(iF-> PSF_to_fftPSF(PSFs_interpolated[iF], plan_PSF),1:pp.orderfreq+1)
+    end
+    
+    B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+    num_noise_levels = length(noise_levels)
+    
+    MSEs = Vector{Float64}(undef, length(noise_levels))
+    
+    figure(figsize=(18,3.5*num_noise_levels))
+    suptitle("$(Tmap_type) reconstruction at fixed noise levels with interpolated PSFs ($(geoms_type)). α = $(@sprintf "%.4e" α ) \n PSF indices used = $(join(idxs_have,", ")); freqs = $(join( round.(freqs_have,digits=3),", ")) ")
+    for i = 1:num_noise_levels
+        noise_level = noise_levels[i]
+        noise = noise_level .* randn(imgp.imgL, imgp.imgL)
+        
+        #image formed with true fftPSFs
+        image_Tmap_grid = make_image(pp, imgp, true, B_Tmap_grid, fftPSFs, freqs, weights, noise, 0, plan_nearfar, plan_PSF, parallel);
+        
+        #reconstruction done with interpolated fftPSFs
+        Test_flat, _ = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs_interpolated, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel)
+        Test = reshape(Test_flat, imgp.objL, imgp.objL)
+        
+        subplot(num_noise_levels, 5, i*5 - 4)
+        imshow(Tmap, vmin = minimum(Tmap), vmax = maximum(Tmap))
+        colorbar()
+        title(L"T(x,y)")
+    
+        subplot(num_noise_levels, 5, i*5 - 3)
+        imshow(Test, vmin = minimum(Tmap), vmax = maximum(Tmap))
+        colorbar()
+        title(L"T_{est}(x,y)")
+    
+        subplot(num_noise_levels, 5, i*5 - 2 )
+        imshow( (Test .- Tmap)./Tmap .* 100)
+        colorbar()
+        MSE = sum((Tmap .- Test).^2) / sum(Tmap.^2)
+        MSEs[i] = MSE
+        title("% difference \n MSE = $(round(MSE, digits=6))")
+        
+        ssim_map = ImageQualityIndexes._ssim_map(iqi, Tmap, Test )
+        subplot(num_noise_levels, 5, i*5 - 1  )
+        imshow( ssim_map )
+        colorbar()
+        title("SSIM \n mean = $( round(mean(ssim_map),digits=6)  )")
+        
+        subplot(num_noise_levels, 5, i*5)
+        imshow(image_Tmap_grid)
+        colorbar()
+        title("image \n noise level is $(noise_level * 100)%")
+    end
+    tight_layout(rect=[0, 0, 1, 0.99])
+    savefig("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_$(@sprintf "%.4e" α )_fixed_noises_interpolated_PSFs_$(join(idxs_have,"_"))_$(opt_date).png")
+    
+    open("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_$(@sprintf "%.4e" α )_fixed_noises_interpolated_PSFs_$(join(idxs_have,"_"))_MSEs_$(opt_date).csv", "w") do io
+        writedlm(io, [noise_levels, MSEs],',')
+    end
+end
+
 
 
 function plot_reconstruction_different_alpha_vals(opt_date, directory, params, freqs, Tinit_flat, Tmap, noise_level, plan_nearfar, plan_PSF, weights, fftPSFs, alpha_vals, parallel, iqi, geoms_type, Tmap_type)
@@ -629,7 +970,7 @@ function plot_reconstruction_different_alpha_vals(opt_date, directory, params, f
         colorbar()
         title("image. α = $(@sprintf "%.4e" α )")
     end
-    tight_layout()
+    tight_layout(rect=[0, 0, 1, 0.99])
     savefig("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_noise_$(noise_level)_different_alpha_vals_$(opt_date).png")
     
     open("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_noise_$(noise_level)_different_alpha_vals_MSEs_$(opt_date).csv", "w") do io
@@ -652,7 +993,7 @@ function plot_PSFs(opt_date, directory, params, freqs, PSFs, parallel, geoms_typ
     maxval = maximum(maximum.(PSFs_cropped))
     minval = minimum(minimum.(PSFs_cropped))
     
-    figure(figsize=(20,9))
+    figure(figsize=(18,11))
     #assumes 21 PSFs
     for i = 1:21
         subplot(3,7,i)
@@ -667,7 +1008,8 @@ function plot_PSFs(opt_date, directory, params, freqs, PSFs, parallel, geoms_typ
         title("ν = $(round(freqs[i],digits=3) )")
         axis("off")
     end
-    tight_layout()
+    tight_layout(rect=[0, 0, 1, 0.97])
+    suptitle("$(geoms_type) PSFs. cropping = $(cropfactor); scaling = $(scaling).")
     if cropfactor==1
         filename = "$directory/PSFs_$(geoms_type)_scaling_$(scaling)_$opt_date.png"
     else
@@ -675,12 +1017,69 @@ function plot_PSFs(opt_date, directory, params, freqs, PSFs, parallel, geoms_typ
     end
     savefig(filename)
 end
+    
+
+
+function plot_PSF_midlines(opt_date, directory, params, freqs, PSFs_diff, PSFs, geoms_type, scaling="different_linear")
+    pp = params.pp
+    imgp = params.imgp
+    psfL = imgp.objL + imgp.imgL
+    middle = div(psfL,2)
+    
+    mid_lines_diff = [PSFs_diff[i][middle, :] for i in 1:pp.orderfreq+1]
+    mid_lines = [PSFs[i][middle, :] for i in 1:pp.orderfreq+1]
+    
+    maxval_diff = maximum(maximum.(mid_lines_diff))
+    minval_diff = minimum(minimum.(mid_lines_diff))
+    maxval_other = maximum(maximum.(mid_lines))
+    minval_other = minimum(minimum.(mid_lines))
+                    
+    maxval = maximum([maxval_diff, maxval_other])
+    minval = minimum([minval_diff, minval_other])
+    
+    xvals = range(-psfL/2 + 0.5, psfL/2 - 0.5, length = psfL) .* pp.cellL .* imgp.binL .* pp.wavcen
+    
+    figure(figsize=(18,10))
+    suptitle("PSF midlines for ideal geometry (blue) and $(geoms_type) geometry (orange)")
+    #assumes 21 PSFs
+    for i = 1:21
+        subplot(3,7,i)
+        if scaling == "different_linear"
+            plot(xvals, mid_lines_diff[i],".-")
+            plot(xvals, mid_lines[i],".-")
+        elseif scaling == "same_linear"
+            plot(xvals, mid_lines_diff[i],".-")
+            plot(xvals, mid_lines[i],".-")
+            ylim([minval, maxval])
+        elseif scaling == "same_log"
+            semilogy(xvals, mid_lines_diff[i],".-")
+            semilogy(xvals, mid_lines[i],".-")
+            xlabel("μm")
+            ylim([minval, maxval])
+        end
+        title("ν = $(round(freqs[i],digits=3) )")
+        #legend(["ideal PSF","$(geoms_type) PSF"])
+    end
+    tight_layout(rect=[0, 0, 1, 0.99])
+    filename = "$directory/PSFs_midlines_$(geoms_type)_scaling_$(scaling)_$opt_date.png"
+    savefig(filename)
+    
+end
+    
+     
 
 function get_transmission_relative_to_no_lens(pp, imgp, Tmap, fftPSFs_freespace, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
     B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
     image_Tmap_grid_freespace = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs_freespace, freqs, weights, plan_nearfar, plan_PSF, parallel)
     image_Tmap_grid_nonoise = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
-    transmission = round(sum(image_Tmap_grid_nonoise) / sum(image_Tmap_grid_freespace) * 100,digits=2)
+    transmission = round(sum(image_Tmap_grid_nonoise) / sum(image_Tmap_grid_freespace) * 100,digits=4)
+end
+    
+function get_optimized_transmission_relative_to_initial(pp, imgp, Tmap, fftPSFs_optimized, fftPSFs_init, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+    image_Tmap_grid_optimized = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs_optimized, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    image_Tmap_grid_initial = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs_init, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    transmission = round(sum(image_Tmap_grid_optimized) / sum(image_Tmap_grid_initial) * 100,digits=4)
 end
 
 function plot_geoms_figure(geoms, directory)
@@ -698,7 +1097,7 @@ function plot_geoms_bigger_figure(geoms, directory)
 end
 
 #TO DO: take PSFs as input so you don't have to recompute each time
-function plot_PSFs_figure(pp, imgp, freqs, PSFs, parallel, directory, cropfactor=1, scaling = "different_linear")
+function plot_PSFs_figure(pp, imgp, freqs, PSFs, parallel, directory, cropfactor=1, scaling = "different_linear",show_colorbar=false)
     #plot PSFs (make sure there are only 21 of them)
     psfL = imgp.objL + imgp.imgL
     
@@ -711,7 +1110,12 @@ function plot_PSFs_figure(pp, imgp, freqs, PSFs, parallel, directory, cropfactor
     maxval = maximum(maximum.(PSFs_cropped))
     minval = minimum(minimum.(PSFs_cropped))
     
-    figure(figsize=(12,6))
+    rc("font",  size=15)
+    if show_colorbar
+        fig = figure(figsize=(14,6.5))
+    else
+        fig = figure(figsize=(12,6))
+    end
     for i = 1:21
         subplot(3,7,i)
         if scaling == "different_linear"
@@ -725,11 +1129,18 @@ function plot_PSFs_figure(pp, imgp, freqs, PSFs, parallel, directory, cropfactor
         title("λ = $(round(wavelength,digits=2) ) μm",fontsize=15)
         axis("off")
     end
-    tight_layout()
-    if cropfactor==1
-        filename = "$directory/PSFs_scaling_$(scaling).png"
+    if show_colorbar
+        fig.subplots_adjust(left=0.05, right=0.85)
+        cbar_ax = fig.add_axes([0.88, 0.13, 0.02, 0.74])
+        colorbar(cax=cbar_ax)
     else
-        filename = "$directory/PSFs_cropped_$(cropfactor)_scaling_$(scaling).png"
+        tight_layout()    
+    end
+    
+    if cropfactor==1
+        filename = "$directory/PSFs_scaling_$(scaling)_colorbar_$(show_colorbar).png"
+    else
+        filename = "$directory/PSFs_cropped_$(cropfactor)_scaling_$(scaling)_colorbar_$(show_colorbar).png"
     end
     savefig(filename)
 end

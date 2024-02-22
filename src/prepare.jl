@@ -76,6 +76,7 @@ struct OptimizeParams{FloatType <: AbstractFloat, IntType <: Signed}
     geoms_init_loadsavename::String
     αinit::FloatType
     α_scaling::FloatType
+    α_lb::FloatType
     maxeval::IntType
     saveeval::IntType
     xtol_rel::FloatType

@@ -929,7 +929,8 @@ function run_opt(pname, presicion, parallel, opt_date)
 
     #file for saving alpha vals
     if optp.optimize_alpha
-        file_save_alpha_vals = "$directory/alpha_vals_$opt_date.csv"   
+        file_save_alpha_vals = "$directory/alpha_vals_$opt_date.csv"  
+        file_save_best_alpha_vals = "$directory/best_alpha_vals_$opt_date.csv"  
     end
 
     #file for saving return values of reconstructions
@@ -982,11 +983,16 @@ function run_opt(pname, presicion, parallel, opt_date)
             writedlm(io, obj_best, ',')
         end
 
-        #save best alpha val
+        #save alpha val and best alpha val
         if optp.optimize_alpha
-            α = params_opt_best[end] / optp.α_scaling
+            α = params_opt[end] / optp.α_scaling
             open(file_save_alpha_vals, "a") do io
                 writedlm(io, α, ',')
+            end
+            
+            α_best = params_opt_best[end] / optp.α_scaling
+            open(file_save_best_alpha_vals, "a") do io
+                writedlm(io, α_best, ',')
             end
         end
         
@@ -1018,7 +1024,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     
         setup, params_opt = Optimisers.update(setup, params_opt, grad)
         params_opt[1:end-1] = (x -> clamp(x, pp.lbwidth, pp.ubwidth)).(params_opt[1:end-1])
-        params_opt[end] = clamp(params_opt[end], 1e-7, Inf)
+        params_opt[end] = clamp(params_opt[end], optp.α_lb * optp.α_scaling, Inf)
     end
     println()
 

@@ -59,6 +59,7 @@ prepare_noise_multiplier, prepare_weights
     using Optim
     using LineSearches
     using Interpolations
+    using Peaks
 
     include("prepare.jl")
     include("utils.jl")
