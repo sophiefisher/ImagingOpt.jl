@@ -29,7 +29,7 @@
     },
  
     "imgp": {
-        "objL": 256,
+        "objL": 128,
         "imgL": 512,
         "binL": 3,
         "objN": 3,
@@ -44,12 +44,14 @@
         
     },
     "optp": {
-        "geoms_init_type":"uniform",
-        "geoms_init_loadfilename":"geoms_singlefreq_lens_2024-01-01T23_41_06.371_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_7.csv",
-        "geoms_init_loadsavename":"singlefreq_lens",
-        "αinit":1e-1,
+        "geoms_init_type":"load",
+        "geoms_init_loadfilename":"geoms_2024-02-13T23:27:28.156_polychromatic_8.0_14.0_20_4.0_2500_640_128_512_3_500_1.0e-12_1.0e-8.csv",
+        "geoms_init_loadsavename":"polychromatic",
+        "αinit":1e-4,
         "α_scaling":1,
-        "maxeval":3500,
+        "α_lb":1e-7,
+        "maxeval":6000,
+        "saveeval":300,
         "xtol_rel":0,
         "cg_maxiter_factor":4,
         "optimize_alpha":true,
@@ -58,9 +60,9 @@
     },
     "recp": {
         "T_init_type":"uniform",
-        "T_init_uniform_val":295,
+        "T_init_uniform_val":443.15,
         "ftol_rel":1e-10,
         "geoms_init_savefilestring":"minimax_1.00e-06_500",
-        "subtract_reg":295
+        "subtract_reg":443.15
     }
 }
