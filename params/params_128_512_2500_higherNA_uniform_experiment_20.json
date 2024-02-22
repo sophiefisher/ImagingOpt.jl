@@ -55,7 +55,7 @@
         "xtol_rel":0,
         "cg_maxiter_factor":4,
         "optimize_alpha":true,
-        "η": 1e-4
+        "η": 1e-3
         
     },
     "recp": {
