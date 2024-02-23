@@ -92,9 +92,7 @@ function print_params(pp, imgp, optp, recp, print_pp::Bool=true, print_imgp::Boo
     if print_optp
         println("######################### printing optimization params #########################")
         println("initializing metasurface as: $(optp.geoms_init_type)")
-        if optp.geoms_init_type == "load"
-            println("metasurface load type: $(optp.geoms_init_loadsavename)")
-        end
+        println("metasurface load type: $(optp.geoms_init_loadsavename)")
         println("initializing α as: $(optp.αinit)")
         println("maximum evaluations: $(optp.maxeval)")
         println("save every: $(optp.saveeval)")
@@ -902,11 +900,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     lblambda = pp.wavcen / pp.ubfreq 
     ublambda = pp.wavcen / pp.lbfreq 
     unit_cell_length = pp.wavcen * pp.cellL
-    if optp.geoms_init_type == "load"
-        opt_id = "$(opt_date)_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)_$(imgp.objN)_$(imgp.lbT)_$(imgp.ubT)_$(imgp.differentiate_noise)_$(imgp.noise_level)_$(optp.geoms_init_type)_$(optp.geoms_init_loadsavename)_$(optp.αinit)_$(optp.maxeval)_$(optp.η)_$(recp.subtract_reg)"
-    else
-        opt_id = "$(opt_date)_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)_$(imgp.objN)_$(imgp.lbT)_$(imgp.ubT)_$(imgp.differentiate_noise)_$(imgp.noise_level)_$(optp.geoms_init_type)_$(optp.αinit)_$(optp.maxeval)_$(optp.η)_$(recp.subtract_reg)"
-    end
+    opt_id = "$(opt_date)_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)_$(imgp.objN)_$(imgp.lbT)_$(imgp.ubT)_$(imgp.differentiate_noise)_$(imgp.noise_level)_$(optp.geoms_init_loadsavename)_$(optp.αinit)_$(optp.maxeval)_$(optp.η)_$(recp.subtract_reg)"
     #opt_id = @sprintf("%s_geoms_%s_%d_%d_%d_batchsize_%d_alphainit_%.1e_maxeval_%d_diffnoise_%s", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, imgp.objN, optp.αinit, optp.maxeval, imgp.differentiate_noise)
     directory = "ImagingOpt.jl/optdata/$(opt_id)"
     Base.Filesystem.mkdir( directory )
