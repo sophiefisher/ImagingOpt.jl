@@ -32,7 +32,7 @@
         "objL": 128,
         "imgL": 512,
         "binL": 3,
-        "objN": 6,
+        "objN": 3,
         "object_type": "random",
         "lbT":263.15,
         "ubT":623.15,
@@ -46,7 +46,7 @@
     "optp": {
         "geoms_init_type":"load",
         "geoms_init_loadfilename":"geoms_2024-02-13T23:33:02.629_polychromatic_8.0_14.0_20_4.0_2500_640_128_512_3_500_1.0e-12_1.0e-8.csv",
-        "geoms_init_loadsavename":"polychromatic",
+        "geoms_init_loadsavename":"polychromatic_higherNA",
         "αinit":1e-4,
         "α_scaling":1,
         "α_lb":1e-7,

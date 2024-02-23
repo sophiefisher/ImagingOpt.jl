@@ -46,7 +46,7 @@
     "optp": {
         "geoms_init_type":"uniform",
         "geoms_init_loadfilename":"geoms_singlefreq_lens_2024-01-01T23_41_06.371_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_7.csv",
-        "geoms_init_loadsavename":"singlefreq_lens",
+        "geoms_init_loadsavename":"uniform",
         "αinit":1e-4,
         "α_scaling":1,
         "α_lb":1e-7,
@@ -55,7 +55,7 @@
         "xtol_rel":0,
         "cg_maxiter_factor":4,
         "optimize_alpha":true,
-        "η": 1e-3
+        "η": 1e-2
         
     },
     "recp": {

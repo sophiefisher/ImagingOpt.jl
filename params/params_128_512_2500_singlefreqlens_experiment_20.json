@@ -46,7 +46,7 @@
     "optp": {
         "geoms_init_type":"load",
         "geoms_init_loadfilename":"geoms_2024-01-26T12_01_42.420_singlefreq_lens_8.0_14.0_20_4.0_2500_640_128_512_3.csv",
-        "geoms_init_loadsavename":"singlefreq_lens",
+        "geoms_init_loadsavename":"singlefreq",
         "αinit":1e-5,
         "α_scaling":1,
         "α_lb":1e-7,
