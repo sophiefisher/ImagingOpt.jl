@@ -15,16 +15,17 @@
         "ubwidth_μm_load":2.8,
         "orderwidth":640,
         "thicknessg_μm":10,
-        "materialg":"Si",
+        "materialg":"Si_no_absorption",
         
         "thickness_sub_μm":300,
-        "materialsub":"Si",
+        "materialsub":"Si_no_absorption",
         
         "in_air":"False",
         "models_dir": "ImagingOpt.jl/surdata", 
         
         "blackbody_scaling": 1,
-        "PSF_scaling":1e12
+        "PSF_scaling":1e10,
+        "nG":1000
     },
  
     "imgp": {
@@ -33,22 +34,22 @@
         "binL": 7,
         "objN": 3,
         "object_type": "random",
-        "lbT":280,
-        "ubT":310,
+        "lbT":263.15,
+        "ubT":623.15,
         "object_loadfilename":"oval8.csv",
         "object_savefilestring":"random_280_310",
         "noise_level": 0.02,
-        "noise_abs":false,
         "emiss_noise_level":0.00,
         "differentiate_noise":false
         
     },
     "optp": {
-        "geoms_init_type":"load",
-        "geoms_init_loadfilename":"geoms_singlefreq_lens_2023-09-27T22_47_43.140.csv",
-        "αinit":1,
+        "geoms_init_type":"uniform",
+        "geoms_init_loadfilename":"geoms_singlefreq_lens_2024-01-01T23_41_06.371_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_7.csv",
+        "geoms_init_loadsavename":"singlefreq_lens",
+        "αinit":1e-3,
         "α_scaling":1,
-        "maxeval":1000,
+        "maxeval":4000,
         "xtol_rel":0,
         "cg_maxiter_factor":4,
         "optimize_alpha":true,
@@ -57,9 +58,9 @@
     },
     "recp": {
         "T_init_type":"uniform",
-        "T_init_uniform_val":295,
+        "T_init_uniform_val":443.15,
         "ftol_rel":1e-10,
         "geoms_init_savefilestring":"minimax_1.00e-06_500",
-        "subtract_reg":295
+        "subtract_reg":443.15
     }
 }
