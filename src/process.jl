@@ -392,73 +392,73 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     
     bg = (imgp.lbT + imgp.ubT)/2
     logo = imgp.lbT + (imgp.ubT - imgp.lbT)*(1/4)
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = (imgp.lbT + imgp.ubT)/2
     logo = imgp.ubT 
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = (imgp.lbT + imgp.ubT)/2
     logo = imgp.lbT 
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = imgp.lbT 
     logo = imgp.ubT 
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = (imgp.lbT + imgp.ubT)/2 - 1
     logo = (imgp.lbT + imgp.ubT)/2 + 1
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 263.15
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 280
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 296
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 300
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 310
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 443.15
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 295
     logo = 623.15
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 263.15
     logo = 623.15
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     bg = 280
     logo = 310
-    Tmap_MIT = load_MIT_Tmap(imgp.objL, bg, logo )
-    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
+    Tmap_MIT_diff_temp = load_MIT_Tmap(imgp.objL, bg, logo )
+    plot_reconstruction_fixed_noise_levels(opt_date, different_T_reconstructions_directory, params, freqs, Tinit_flat, Tmap_MIT_diff_temp, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT_$(bg)_$(logo)")
     
     lbT = 263.15
     ubT = 623.15
