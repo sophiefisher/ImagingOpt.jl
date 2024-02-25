@@ -45,8 +45,8 @@
     },
     "optp": {
         "geoms_init_type":"load",
-        "geoms_init_loadfilename":"geoms_achromatic_lens_2024-01-18T10_34_20.603_achromatic_lens_8.0_12.0_20_4.0_2048_640_32_64_7.csv",
-        "geoms_init_loadsavename":"achromatic",
+        "geoms_init_loadfilename":"geoms_singlefreq_lens_2024-01-01T23_41_06.371_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_7.csv",
+        "geoms_init_loadsavename":"singlefreq",
         "αinit":1e-3,
         "α_scaling":1,
         "α_lb":1e-7,
