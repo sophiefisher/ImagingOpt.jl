@@ -653,7 +653,155 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date, maxeval = 
 
 end
 
-function design_singlefreq_lens(pname, presicion, parallel, opt_date, outer_iterations=1000, inner_iterations=1, line_search_iterations=1)
+
+
+function design_singlefreq_lens_NLOPT(pname, presicion, parallel, opt_date, xtol_rel = 1e-8, maxeval = 100)
+    params = get_params(pname, presicion)
+    pp = params.pp
+    imgp = params.imgp
+    
+    #prepare opt files
+    lblambda = pp.wavcen / pp.ubfreq 
+    ublambda = pp.wavcen / pp.lbfreq 
+    unit_cell_length = pp.wavcen * pp.cellL
+    opt_id = "$(opt_date)_singlefreq_lens_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)_$(xtol_rel)_$(maxeval)"
+    directory = @sprintf("ImagingOpt.jl/geomsoptdata/%s", opt_id)
+    Base.Filesystem.mkdir( directory )
+    
+    #save input parameters in json file
+    jsonread = JSON3.read(read("$PARAMS_DIR/$pname.json", String))
+    open("$directory/$(pname)_$(opt_date).json", "w") do io
+        JSON3.pretty(io, jsonread)
+    end
+
+    println("######################### params loaded #########################")
+    println()
+    flush(stdout)
+    print_params(pp, imgp, params.optp, params.recp, true, true, false, false)
+    flush(stdout)
+
+    #file for saving objective vals
+    file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"   
+
+    surrogates, freqs = prepare_surrogate(pp)
+    middle_freq_idx = (length(freqs) + 1) ÷ 2
+    surrogate = surrogates[middle_freq_idx]
+    freq = freqs[middle_freq_idx]
+
+    plan_nearfar, _ = prepare_fft_plans(pp, imgp)
+
+    geoms_init = fill((pp.lbwidth + pp.ubwidth)/2, pp.gridL^2)
+
+    psfL = imgp.objL + imgp.imgL
+    middle = div(psfL,2)
+
+
+    function objective(parameters)
+        geoms_grid = reshape(parameters, pp.gridL, pp.gridL)
+        PSF = get_PSF(freq, surrogate, pp, imgp, geoms_grid, plan_nearfar, parallel)
+        obj = (PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1])
+    end
+
+
+    function myfunc(parameters, grad, save=true)
+        obj = objective(parameters)
+    
+        if length(grad) > 0
+            grad[1:end] = Zygote.gradient(geoms_flat -> objective(geoms_flat), parameters)[1]
+        end
+    
+        if save
+            @ignore_derivatives open(file_save_objective_vals, "a") do io
+                writedlm(io, obj, ',')
+            end
+        end
+    
+        obj
+    end
+
+    #=
+    #options = Optim.Options(time_limit = time_limit)
+    options = Optim.Options(outer_iterations=outer_iterations, iterations=inner_iterations)
+    method = Fminbox(Optim.LBFGS(m=10, linesearch=LineSearches.BackTracking(iterations=line_search_iterations) ))
+    ret_optim = Optim.optimize(geoms_flat -> objective(geoms_flat, true), grad!, [pp.lbwidth for _ in 1:pp.gridL^2], [pp.ubwidth for _ in 1:pp.gridL^2], geoms_init, method, options)
+    =#
+
+    opt = Opt(:LD_MMA, pp.gridL^2)
+    opt.lower_bounds = fill(pp.lbwidth,pp.gridL^2)
+    opt.upper_bounds = fill(pp.ubwidth,pp.gridL^2)
+    opt.max_objective = myfunc
+    opt.xtol_rel = xtol_rel
+    opt.maxeval = maxeval
+
+    (maxf,mingeoms,ret) = NLopt.optimize(opt, geoms_init)
+
+    println(ret)
+    flush(stdout)
+
+    #save output data in json file
+    dict_output = Dict("return_val" => ret)
+    output_data_filename = "$directory/output_data_$opt_date.json"
+    open(output_data_filename,"w") do io
+        JSON3.pretty(io, dict_output)
+    end
+
+    #save optimized metasurface parameters (geoms)
+    geoms_filename = "$directory/geoms_$(opt_id).csv"
+    writedlm( geoms_filename,  mingeoms,',')
+
+    #process opt
+    geoms = reshape(mingeoms, pp.gridL, pp.gridL)
+
+    #plot objective values
+    objdata = readdlm(file_save_objective_vals,',')
+    figure(figsize=(20,6))
+    suptitle("objective data")
+    subplot(1,2,1)
+    plot(objdata,".-")
+
+    subplot(1,2,2)
+    semilogy(abs.(objdata),".-")
+    tight_layout()
+    savefig("$directory/objective_vals_$opt_date.png")
+
+    #plot geoms
+    figure(figsize=(16,5))
+    subplot(1,3,1)
+    imshow( reshape(geoms_init, pp.gridL, pp.gridL) , vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("initial metasurface \n parameters")
+    subplot(1,3,2)
+    imshow(geoms, vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    subplot(1,3,3)
+    imshow(geoms)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    savefig("$directory/geoms_singlefreq_lens_$(opt_id).png")
+
+    #plot PSFs (make sure there are only 21 of them)
+    if parallel
+        PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    else
+        PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+    end
+    figure(figsize=(20,9))
+    for i = 1:21
+        subplot(3,7,i)
+        imshow(PSFs[i])
+        colorbar()
+        title("PSF for ν = $(round(freqs[i],digits=3) )")
+    end
+    tight_layout()
+    savefig("$directory/PSFs_$opt_date.png")
+
+    geoms
+end
+
+
+
+function design_singlefreq_lens_OPTIM(pname, presicion, parallel, opt_date, outer_iterations=1000, inner_iterations=1, line_search_iterations=1)
     params = get_params(pname, presicion)
     pp = params.pp
     imgp = params.imgp
@@ -804,13 +952,13 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
     end
 
     if parallel
-        far_fields = ThreadsX.map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
-        fftPSFs = ThreadsX.map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
+        @time far_fields = ThreadsX.map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+        @time fftPSFs = ThreadsX.map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
         dsur_dg_times_incidents = ThreadsX.map(iF->get_dsur_dg_times_incident(pp, freqs[iF], surrogates[iF], geoms, parallel),1:pp.orderfreq+1)
 
     else
-        far_fields = map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
-        fftPSFs = map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
+        @time far_fields = map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+        @time fftPSFs = map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
         dsur_dg_times_incidents = map(iF->get_dsur_dg_times_incident(pp, freqs[iF], surrogates[iF], geoms, parallel),1:pp.orderfreq+1)
     end
 
@@ -830,12 +978,12 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
         noise = noises[obji]
         B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
         
-        image_Tmap_grid_noiseless = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+        @time image_Tmap_grid_noiseless = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
         relative_noise_level = imgp.noise_level * noise_multiplier / mean(image_Tmap_grid_noiseless) * 100
         relative_noise_levels[obji] = relative_noise_level
         image_Tmap_grid = add_noise_to_image(image_Tmap_grid_noiseless, imgp.differentiate_noise, noise, noise_multiplier)
 
-        Test_flat, ret_val, num_evals = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel, false, false)
+        @time Test_flat, ret_val, num_evals = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel, false, false)
         ret_vals[obji] = ret_val
         num_evals_list[obji] = num_evals
 
