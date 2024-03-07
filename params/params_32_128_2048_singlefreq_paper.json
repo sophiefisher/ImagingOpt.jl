@@ -5,7 +5,7 @@
         "orderλ":20,
         
         "F_μm": 20280,
-        "depth_μm":200000,
+        "depth_μm":4000000,
         "gridL": 2048,
         
         "cellL_μm":4,
@@ -49,7 +49,7 @@
         "geoms_init_loadsavename":"singlefreq",
         "αinit":1e-3,
         "α_scaling":1,
-        "α_lb":1e-7,
+        "α_lb":0,
         "maxeval":6000,
         "saveeval":300,
         "xtol_rel":0,
