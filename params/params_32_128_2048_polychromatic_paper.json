@@ -44,9 +44,9 @@
         
     },
     "optp": {
-        "geoms_init_type":"uniform",
-        "geoms_init_loadfilename":"geoms_singlefreq_lens_2024-01-01T23_41_06.371_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_7.csv",
-        "geoms_init_loadsavename":"uniform",
+        "geoms_init_type":"load",
+        "geoms_init_loadfilename":"geoms_2024-03-07T00_37_10.317_polychromatic_8.0_12.0_20_4.0_2048_640_32_64_7_500_1.0e-8_1.0e-8.csv",
+        "geoms_init_loadsavename":"polychromatic",
         "αinit":1e-3,
         "α_scaling":1,
         "α_lb":0,
