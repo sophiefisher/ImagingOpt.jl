@@ -1,17 +1,17 @@
 function process_opt(presicion, parallel, opt_date, opt_id, pname)
-    directory = "ImagingOpt.jl/optdata/$opt_id"
+    directory = "ImagingOpt.jl/optdata/$(opt_id)"
     
-    MIT_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/MIT_reconstructions"
+    MIT_reconstructions_directory = "ImagingOpt.jl/optdata/$(opt_id)/MIT_reconstructions"
     if ! isdir(MIT_reconstructions_directory)
         Base.Filesystem.mkdir(MIT_reconstructions_directory)
     end
     
-    random_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/random_reconstructions"
+    random_reconstructions_directory = "ImagingOpt.jl/optdata/$(opt_id)/random_reconstructions"
     if ! isdir(random_reconstructions_directory)
         Base.Filesystem.mkdir(random_reconstructions_directory)
     end
     
-    PSFs_directory = "ImagingOpt.jl/optdata/$opt_id/more_PSFs"
+    PSFs_directory = "ImagingOpt.jl/optdata/$(opt_id)/more_PSFs"
     if ! isdir(PSFs_directory)
         Base.Filesystem.mkdir(PSFs_directory)
     end
@@ -37,43 +37,16 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     
     Tmap_MIT = load_MIT_Tmap(imgp.objL, (imgp.lbT + imgp.ubT)/2, imgp.lbT + (imgp.ubT - imgp.lbT)*(3/4) )
     Tmaps_MIT = [ Tmap_MIT ]
-    noises_MIT = [ imgp.noise_level .* randn(imgp.imgL, imgp.imgL); ]
+    noises_MIT = [ prepare_noise(imgp); ]
     
     ################################# plot objective, alpha, and noise values throughout opt #################################
     println("######################### plotting objective and alpha values #########################")
     println()
     
-    file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"
-    objdata = readdlm(file_save_objective_vals,',')
-    figure(figsize=(18,10))
-    suptitle(L"\mathrm{objective \  data } ,  \langle \frac{|| T - T_{est} ||^2}{  || T ||^2} \rangle_{T}")
-    subplot(2,2,1)
-    plot(objdata,".-")
-    xlabel("iteration")
-    title("objective values")
-
-    subplot(2,2,2)
-    semilogy(objdata,".-")
-    xlabel("iteration")
-    title("objective values (semilog plot)")
-
-    file_save_best_objective_vals = "$directory/best_objective_vals_$opt_date.csv"
-    objdata_best = readdlm(file_save_best_objective_vals,',')
-    subplot(2,2,3)
-    plot(objdata_best,".-",color="orange")
-    xlabel("iteration")
-    title("best objective values")
-
-    subplot(2,2,4)
-    semilogy(objdata_best,".-",color="orange")
-    xlabel("iteration")
-    title("best objective values (semilog plot)")
-    
-    tight_layout()
-    savefig("$directory/objective_vals_$opt_date.png")
+    plot_objective_vals(directory, opt_date, "training")
     
     if optp.optimize_alpha
-        file_save_alpha_vals = "$directory/alpha_vals_$opt_date.csv"   
+        file_save_alpha_vals = "$(directory)/alpha_vals_$(opt_date).csv"   
         alpha_vals = readdlm(file_save_alpha_vals,',')
         
         figure(figsize=(18,10))
@@ -88,7 +61,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
         xlabel("iteration")
         title("alpha values (semilog plot)")
         
-        file_save_best_alpha_vals = "$directory/best_alpha_vals_$opt_date.csv"   
+        file_save_best_alpha_vals = "$(directory)/best_alpha_vals_$(opt_date).csv"   
         best_alpha_vals = readdlm(file_save_best_alpha_vals,',')
         subplot(2,2,3)
         plot(best_alpha_vals,".-",color="orange")
@@ -104,7 +77,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
         savefig("$directory/alpha_vals_$opt_date.png")
     end
     
-    file_relative_noise_levels = "$directory/relative_noise_levels_$opt_date.csv"
+    file_relative_noise_levels = "$(directory)/relative_noise_levels_$(opt_date).csv"
     relative_noise_levels = readdlm(file_relative_noise_levels,',')
     figure(figsize=(12,6))
     title("noise levels (relative to mean image) throughout optimization")
@@ -115,7 +88,79 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     xlabel("iteration")
     legend(["$(obji)" for obji = 1:imgp.objN])
     tight_layout()
-    savefig("$directory/relative_noise_levels_$opt_date.png")
+    savefig("$(directory)/relative_noise_levels_$(opt_date).png")
+    
+    if optp.eval_test_data
+        directory_TEST = "$(directory)/test_data"
+        
+        #plot objective values
+        plot_objective_vals(directory_TEST, opt_date, "test")
+        
+        #plot relative noise values
+        file_relative_noise_levels_TEST = "$(directory_TEST)/relative_noise_levels_$(opt_date).csv"
+        relative_noise_levels_TEST = readdlm(file_relative_noise_levels_TEST,',')
+        figure(figsize=(12,6))
+        title("noise levels (relative to mean image) throughout optimization on test set")
+        plot(relative_noise_levels_TEST,".-")
+        ylabel("% of mean image value")
+        xlabel("iteration")
+        tight_layout()
+        savefig("$(directory_TEST)/relative_noise_levels_$(opt_date).png")
+        
+        #plot objective values of training and test set together
+        objdata_train = readdlm("$(directory)/objective_vals_$(opt_date).csv",',')
+        objdata_test = readdlm("$(directory_TEST)/objective_vals_$(opt_date).csv",',')
+        objdata_best_train = readdlm("$(directory)/best_objective_vals_$(opt_date).csv",',')
+        objdata_best_test = readdlm("$(directory_TEST)/best_objective_vals_$(opt_date).csv",',')
+        
+        figure(figsize=(18,10))
+        suptitle(L"\mathrm{objective \  data } ,  \langle \frac{|| T - T_{est} ||^2}{  || T ||^2} \rangle_{T},\mathrm{ training \ and \ test \ set}")
+        subplot(2,2,1)
+        plot(1:length(objdata_train), objdata_train,".-")
+        plot(1:length(objdata_test), objdata_test,".-")
+        xlabel("iteration")
+        title("objective values")
+        legend(["training set","test set"])
+
+        subplot(2,2,2)
+        semilogy(1:length(objdata_train), objdata_train,".-")
+        semilogy(1:length(objdata_test), objdata_test,".-")
+        xlabel("iteration")
+        title("objective values (semilog plot)")
+        legend(["training set","test set"])
+
+        subplot(2,2,3)
+        plot(1:length(objdata_best_train), objdata_best_train,".-")
+        plot(1:length(objdata_best_test), objdata_best_test,".-")
+        xlabel("iteration")
+        title("best objective values")
+        legend(["training set","test set"])
+
+        subplot(2,2,4)
+        semilogy(1:length(objdata_best_train), objdata_best_train,".-")
+        semilogy(1:length(objdata_best_test), objdata_best_test,".-")
+        xlabel("iteration")
+        title("best objective values (semilog plot)")
+        legend(["training set","test set"])
+
+        tight_layout()
+        savefig("$(directory_TEST)/objective_vals_train_and_test_$(opt_date).png")
+        
+        
+        #plot relative noise values of training and test set together
+        figure(figsize=(12,6))
+        title("noise levels (relative to mean image) throughout optimization, training and test set")
+        for obji = 1:imgp.objN
+            plot(relative_noise_levels[:,obji],".-")
+        end
+        plot(relative_noise_levels_TEST,".-")
+        ylabel("% of mean image value")
+        xlabel("iteration")
+        legend([["$(obji)" for obji = 1:imgp.objN]; "training object"])
+        tight_layout()
+        savefig("$(directory_TEST)/relative_noise_levels_$(opt_date).png")
+        
+    end
     
     ################################# INITIAL geoms, alpha, and PSFs #################################
     #TO DO: if starting from random metasurface, save and then reload geoms here
@@ -184,7 +229,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     println("######################### plotting optimized PSFs, reconstructions #########################")
     println()
     
-    geoms_filename = "$directory/geoms_optimized_$opt_date.csv"
+    geoms_filename = "$(directory)/geoms_optimized_$(opt_date).csv"
     geoms_optimized = reshape(readdlm(geoms_filename,','),pp.gridL, pp.gridL )
     
     if parallel
@@ -312,7 +357,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     println("######################### plotting nice figures #########################")
     println()
     
-    figure_plots_intial_directory = "ImagingOpt.jl/optdata/$opt_id/figure_plots_initial"
+    figure_plots_intial_directory = "ImagingOpt.jl/optdata/$(opt_id)/figure_plots_initial"
     if ! isdir(figure_plots_intial_directory)
         Base.Filesystem.mkdir( figure_plots_intial_directory )
     end
@@ -347,7 +392,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     plot_Tmap_image_reconstruction_figures(pp, imgp, optp, recp, Tmaps_random[1], α_init, fftPSFs_init, Tinit_flat, freqs, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel, figure_plots_intial_directory, "random")
     
     
-    figure_plots_optimized_directory = "ImagingOpt.jl/optdata/$opt_id/figure_plots_optimized"
+    figure_plots_optimized_directory = "ImagingOpt.jl/optdata/$(opt_id)/figure_plots_optimized"
     if ! isdir(figure_plots_optimized_directory)
         Base.Filesystem.mkdir( figure_plots_optimized_directory )
     end
@@ -385,7 +430,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     println("######################### plotting reconstructions for different temperature ranges #########################")
     println()
     
-    different_T_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/different_temperature_reconstructions"
+    different_T_reconstructions_directory = "ImagingOpt.jl/optdata/$(opt_id)/different_temperature_reconstructions"
     if ! isdir(different_T_reconstructions_directory)
         Base.Filesystem.mkdir(different_T_reconstructions_directory)
     end
@@ -484,7 +529,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     println("######################### calculating strehl ratios #########################")
     println()
     
-    strehl_ratios_directory = "ImagingOpt.jl/optdata/$opt_id/strehl_ratios"
+    strehl_ratios_directory = "ImagingOpt.jl/optdata/$(opt_id)/strehl_ratios"
     if ! isdir(strehl_ratios_directory)
         Base.Filesystem.mkdir(strehl_ratios_directory)
     end
@@ -593,7 +638,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     println("######################### plotting reconstructions for noisy PSFs #########################")
     println()
     
-    noisy_PSFs_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/noisy_PSFs_reconstructions"
+    noisy_PSFs_reconstructions_directory = "ImagingOpt.jl/optdata/$(opt_id)/noisy_PSFs_reconstructions"
     if ! isdir(noisy_PSFs_reconstructions_directory)
         Base.Filesystem.mkdir(noisy_PSFs_reconstructions_directory)
     end
@@ -612,17 +657,17 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     println("######################### plotting reconstructions for interpolated PSFs #########################")
     println()
     
-    interpolated_PSFs_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/interpolated_PSFs_reconstructions"
+    interpolated_PSFs_reconstructions_directory = "ImagingOpt.jl/optdata/$(opt_id)/interpolated_PSFs_reconstructions"
     if ! isdir(interpolated_PSFs_reconstructions_directory)
         Base.Filesystem.mkdir(interpolated_PSFs_reconstructions_directory)
     end
     
-    interpolated_PSFs_optimized_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/interpolated_PSFs_reconstructions/optimized"
+    interpolated_PSFs_optimized_reconstructions_directory = "ImagingOpt.jl/optdata/$(opt_id)/interpolated_PSFs_reconstructions/optimized"
     if ! isdir(interpolated_PSFs_optimized_reconstructions_directory)
         Base.Filesystem.mkdir(interpolated_PSFs_optimized_reconstructions_directory)
     end
     
-    interpolated_PSFs_initial_reconstructions_directory = "ImagingOpt.jl/optdata/$opt_id/interpolated_PSFs_reconstructions/initial"
+    interpolated_PSFs_initial_reconstructions_directory = "ImagingOpt.jl/optdata/$(opt_id)/interpolated_PSFs_reconstructions/initial"
     if ! isdir(interpolated_PSFs_initial_reconstructions_directory)
         Base.Filesystem.mkdir(interpolated_PSFs_initial_reconstructions_directory)
     end
@@ -1161,7 +1206,7 @@ function plot_image_figure(pp, imgp, Tmap, fftPSFs, freqs, weights, noise_multip
     
     if noise_model_type == "default"
         
-        noise = imgp.noise_level .* randn(imgp.imgL, imgp.imgL);
+        noise = prepare_noise(imgp);
         image_Tmap_grid = make_image(pp, imgp, imgp.differentiate_noise, B_Tmap_grid, fftPSFs, freqs, weights, noise, noise_multiplier, plan_nearfar, plan_PSF, parallel);
         if imgp.differentiate_noise
             noise_level = imgp.noise_level * 100
@@ -1247,3 +1292,34 @@ function get_PSF_diffraction_limited(freq, pp, imgp, plan_nearfar)
     PSF = far_to_PSF(far, imgp.objL + imgp.imgL, imgp.binL, pp.PSF_scaling, freq)
 end
 
+
+function plot_objective_vals(directory, opt_date, data_type="training")
+    file_save_objective_vals = "$(directory)/objective_vals_$(opt_date).csv"
+    objdata = readdlm(file_save_objective_vals,',')
+    figure(figsize=(18,10))
+    suptitle(L"\mathrm{objective \  data } ,  \langle \frac{|| T - T_{est} ||^2}{  || T ||^2} \rangle_{T},\mathrm{ %$(data_type) \ set}")
+    subplot(2,2,1)
+    plot(1:length(objdata), objdata,".-")
+    xlabel("iteration")
+    title("objective values")
+
+    subplot(2,2,2)
+    semilogy(1:length(objdata), objdata,".-")
+    xlabel("iteration")
+    title("objective values (semilog plot)")
+
+    file_save_best_objective_vals = "$(directory)/best_objective_vals_$(opt_date).csv"
+    objdata_best = readdlm(file_save_best_objective_vals,',')
+    subplot(2,2,3)
+    plot(1:length(objdata_best), objdata_best,".-",color="orange")
+    xlabel("iteration")
+    title("best objective values")
+
+    subplot(2,2,4)
+    semilogy(1:length(objdata_best), objdata_best,".-",color="orange")
+    xlabel("iteration")
+    title("best objective values (semilog plot)")
+
+    tight_layout()
+    savefig("$(directory)/objective_vals_$(opt_date).png")
+end

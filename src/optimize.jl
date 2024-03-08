@@ -933,7 +933,41 @@ function design_singlefreq_lens_OPTIM(pname, presicion, parallel, opt_date, oute
     geoms
 end
 
+#assumes only one Tmap in the test set
+function compute_test_obj(params_opt, params_init, Tmap, freqs, surrogates, Tinit_flat, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel)
+    pp = params_init.pp
+    imgp = params_init.imgp
+    optp = params_init.optp
+    recp = params_init.recp
+    
+    noise = prepare_noise(imgp)
 
+    if optp.optimize_alpha
+        geoms = reshape(params_opt[1:end-1], pp.gridL, pp.gridL)
+        α = params_opt[end] / optp.α_scaling
+    else
+        geoms = reshape(params_opt, pp.gridL, pp.gridL)
+        α = optp.αinit
+    end
+
+    if parallel
+        fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    else
+        fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    end
+    
+    B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+    image_Tmap_grid_noiseless = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    relative_noise_level = imgp.noise_level * noise_multiplier / mean(image_Tmap_grid_noiseless) * 100
+    image_Tmap_grid = add_noise_to_image(image_Tmap_grid_noiseless, imgp.differentiate_noise, noise, noise_multiplier)
+
+    Test_flat, ret_val, num_evals = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel, false, false)
+
+    objective = sum((Tmap[:] .- Test_flat).^2) / sum(Tmap.^2)
+    
+    objective, [ret_val;], num_evals, relative_noise_level
+end
+    
 function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel)
     pp = params_init.pp
     imgp = params_init.imgp
@@ -952,13 +986,13 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
     end
 
     if parallel
-        @time far_fields = ThreadsX.map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
-        @time fftPSFs = ThreadsX.map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
+        far_fields = ThreadsX.map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+        fftPSFs = ThreadsX.map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
         dsur_dg_times_incidents = ThreadsX.map(iF->get_dsur_dg_times_incident(pp, freqs[iF], surrogates[iF], geoms, parallel),1:pp.orderfreq+1)
 
     else
-        @time far_fields = map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
-        @time fftPSFs = map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
+        far_fields = map(iF->get_far(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
+        fftPSFs = map(iF->get_fftPSF_from_far(far_fields[iF], freqs[iF], pp, imgp, plan_nearfar, plan_PSF),1:pp.orderfreq+1)
         dsur_dg_times_incidents = map(iF->get_dsur_dg_times_incident(pp, freqs[iF], surrogates[iF], geoms, parallel),1:pp.orderfreq+1)
     end
 
@@ -978,12 +1012,12 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
         noise = noises[obji]
         B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
         
-        @time image_Tmap_grid_noiseless = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+        image_Tmap_grid_noiseless = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
         relative_noise_level = imgp.noise_level * noise_multiplier / mean(image_Tmap_grid_noiseless) * 100
         relative_noise_levels[obji] = relative_noise_level
         image_Tmap_grid = add_noise_to_image(image_Tmap_grid_noiseless, imgp.differentiate_noise, noise, noise_multiplier)
 
-        @time Test_flat, ret_val, num_evals = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel, false, false)
+        Test_flat, ret_val, num_evals = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel, false, false)
         ret_vals[obji] = ret_val
         num_evals_list[obji] = num_evals
 
@@ -1060,43 +1094,66 @@ function run_opt(pname, presicion, parallel, opt_date)
 
     #save additional system parameters in json file
     extra_params = compute_system_params(pp, imgp)
-    extra_params_filename = "$directory/extra_params_$opt_date.json"
+    extra_params_filename = "$(directory)/extra_params_$(opt_date).json"
     open(extra_params_filename,"w") do io
         JSON3.pretty(io, extra_params)
     end
     
     #file for saving objective vals
-    file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"  
-    file_save_best_objective_vals = "$directory/best_objective_vals_$opt_date.csv"  
+    file_save_objective_vals = "$(directory)/objective_vals_$(opt_date).csv"  
+    file_save_best_objective_vals = "$(directory)/best_objective_vals_$(opt_date).csv"  
 
     #file for saving alpha vals
     if optp.optimize_alpha
-        file_save_alpha_vals = "$directory/alpha_vals_$opt_date.csv"  
-        file_save_best_alpha_vals = "$directory/best_alpha_vals_$opt_date.csv"  
+        file_save_alpha_vals = "$(directory)/alpha_vals_$(opt_date).csv"  
+        file_save_best_alpha_vals = "$(directory)/best_alpha_vals_$(opt_date).csv"  
     end
 
     #file for saving return values of reconstructions
-    file_reconstruction_ret_vals = "$directory/reconstruction_return_vals_$opt_date.csv"
+    file_reconstruction_ret_vals = "$(directory)/reconstruction_return_vals_$(opt_date).csv"
 
     #file for saving number of function evals for reconstructions
-    file_reconstruction_num_evals = "$directory/reconstruction_num_function_evals_$opt_date.csv"
+    file_reconstruction_num_evals = "$(directory)/reconstruction_num_function_evals_$(opt_date).csv"
     
     #file for saving relative noise_levels for each image
-    file_relative_noise_levels = "$directory/relative_noise_levels_$opt_date.csv"
+    file_relative_noise_levels = "$(directory)/relative_noise_levels_$(opt_date).csv"
 
     #file for saving conjugate gradient solve iterations
-    file_save_cg_iters = "$directory/cg_iters_$opt_date.csv"
+    file_save_cg_iters = "$(directory)/cg_iters_$(opt_date).csv"
     open(file_save_cg_iters, "a") do io
         write(io, "Default maxiter = $(imgp.objL^2); set to maxiter = $(optp.cg_maxiter_factor * imgp.objL^2) \n")
     end
     
     #file for saving best geoms
-    geoms_filename = "$directory/geoms_optimized_$opt_date.csv"
+    geoms_filename = "$(directory)/geoms_optimized_$(opt_date).csv"
     
     #folder for saving geoms at intermediate iterations
-    geoms_directory = "$directory/more_geoms"
+    geoms_directory = "$(directory)/more_geoms"
     if ! isdir(geoms_directory)
         Base.Filesystem.mkdir(geoms_directory)
+    end
+    
+    #if saving test data
+    if optp.eval_test_data
+        Tmap_MIT = load_MIT_Tmap(imgp.objL, (imgp.lbT + imgp.ubT)/2, imgp.lbT + (imgp.ubT - imgp.lbT)*(3/4) )
+        
+        directory_TEST = "$(directory)/test_data"
+        if ! isdir(directory_TEST)
+            Base.Filesystem.mkdir(directory_TEST)
+        end
+        
+        #file for saving objective vals
+        file_save_objective_vals_TEST = "$(directory_TEST)/objective_vals_$(opt_date).csv"  
+        file_save_best_objective_vals_TEST = "$(directory_TEST)/best_objective_vals_$(opt_date).csv" 
+        
+        #file for saving return values of reconstructions
+        file_reconstruction_ret_vals_TEST = "$(directory_TEST)/reconstruction_return_vals_$(opt_date).csv"
+
+        #file for saving number of function evals for reconstructions
+        file_reconstruction_num_evals_TEST = "$(directory_TEST)/reconstruction_num_function_evals_$(opt_date).csv"
+
+        #file for saving relative noise_levels for each image
+        file_relative_noise_levels_TEST = "$(directory_TEST)/relative_noise_levels_$(opt_date).csv"
     end
     
     opt = Optimisers.ADAM(optp.η)
@@ -1104,10 +1161,15 @@ function run_opt(pname, presicion, parallel, opt_date)
 
     params_opt_best = params_opt
     obj_best = Inf
+    
+    if optp.eval_test_data
+        obj_best_TEST = Inf
+    end
 
     println("######################### beginning optimization #########################")
     println()
     for iter in 1:optp.maxeval
+        print("training set: ")
         @time objective, grad, num_cg_iters_list, ret_vals, num_evals_list, relative_noise_levels = compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_flat, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel)
     
         if objective < obj_best
@@ -1158,10 +1220,54 @@ function run_opt(pname, presicion, parallel, opt_date)
             writedlm(io, relative_noise_levels,',')
         end
         
-        #save geoms every optp.saveeval iterations
+                
+        #if test data
+        if optp.eval_test_data
+            print("test set: ")
+            @time objective_TEST, ret_val_TEST, num_evals_TEST, relative_noise_level_TEST = compute_test_obj(params_opt, params_init, Tmap_MIT, freqs, surrogates, Tinit_flat, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel)
+            
+            if objective_TEST < obj_best_TEST
+                obj_best_TEST = objective_TEST
+            end
+
+            #save objective val
+            open(file_save_objective_vals_TEST, "a") do io
+                writedlm(io, objective_TEST, ',')
+            end
+
+            #save best objective val
+            open(file_save_best_objective_vals_TEST, "a") do io
+                writedlm(io, obj_best_TEST, ',')
+            end
+            
+            #save return value of reconstruction
+            open(file_reconstruction_ret_vals_TEST, "a") do io
+                writedlm(io, ret_val_TEST,',')
+            end
+
+            #save number of function evals of reconstruction
+            open(file_reconstruction_num_evals_TEST, "a") do io
+                writedlm(io, num_evals_TEST,',')
+            end
+
+            #save relative noise values for all images
+            open(file_relative_noise_levels_TEST, "a") do io
+                writedlm(io, relative_noise_level_TEST,',')
+            end
+            
+        end
+        
+        
+        #save geoms and plot objective values every optp.saveeval iterations
         if mod(iter, optp.saveeval) == 0
             writedlm( geoms_filename,  params_opt_best[1:end-1] ,',')
             writedlm( "$(geoms_directory)/geoms_iter_$(iter)_$opt_date.csv",  params_opt_best[1:end-1],',')
+            
+            plot_objective_vals(directory, opt_date, "training")
+            
+            if optp.eval_test_data
+                plot_objective_vals(directory_TEST, opt_date, "test")
+            end
         end
     
         setup, params_opt = Optimisers.update(setup, params_opt, grad)

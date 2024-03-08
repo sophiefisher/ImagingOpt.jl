@@ -83,6 +83,7 @@ struct OptimizeParams{FloatType <: AbstractFloat, IntType <: Signed}
     cg_maxiter_factor::IntType
     optimize_alpha::Bool
     η::FloatType
+    eval_test_data::Bool
 end
 
 struct ReconstructionParams{FloatType <: AbstractFloat}
@@ -266,9 +267,13 @@ function prepare_reconstruction(recp::ReconstructionParams, imgp::ImagingParams)
     Tinit
 end
 
+function prepare_noise(imgp::ImagingParams)
+    noise = imgp.noise_level .* randn(imgp.imgL, imgp.imgL) 
+end
+
 function prepare_noises(imgp::ImagingParams)
     #Random.seed!(0)
-    noises = [imgp.noise_level .* randn(imgp.imgL, imgp.imgL) for i in 1:imgp.objN]
+    noises = [prepare_noise(imgp) for _ in 1:imgp.objN]
 end
 
 function prepare_fft_plans(pp::PhysicsParams, imgp::ImagingParams)
