@@ -81,6 +81,7 @@ struct OptimizeParams{FloatType <: AbstractFloat, IntType <: Signed}
     saveeval::IntType
     xtol_rel::FloatType
     cg_maxiter_factor::IntType
+    pre_optimize_alpha::Bool
     optimize_alpha::Bool
     η::FloatType
     eval_test_data::Bool

@@ -188,7 +188,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
         fftPSFs_init = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
     end
     =#
-    α_init = optp.αinit
+    α_init = best_alpha_vals[1]
     
     #plot initial PSFs
     plot_PSFs(opt_date, directory, params, freqs, PSFs_init, parallel, "initial", 1, "different_linear")
@@ -255,6 +255,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     if optp.optimize_alpha
         α_optimized = best_alpha_vals[end]
     else
+        #TO DO: get rid of this case? or add pre-optimizing alpha case here?
         α_optimized = optp.αinit
     end
     

@@ -93,6 +93,7 @@ function print_params(pp, imgp, optp, recp, print_pp::Bool=true, print_imgp::Boo
         println("######################### printing optimization params #########################")
         println("initializing metasurface as: $(optp.geoms_init_type)")
         println("metasurface load type: $(optp.geoms_init_loadsavename)")
+        println("pre-optimizing alpha?: $(optp.pre_optimize_alpha)")
         println("initializing α as: $(optp.αinit)")
         println("maximum evaluations: $(optp.maxeval)")
         println("save every: $(optp.saveeval)")
@@ -933,6 +934,123 @@ function design_singlefreq_lens_OPTIM(pname, presicion, parallel, opt_date, oute
     geoms
 end
 
+
+function pre_optimize_alpha(params_init, surrogates, freqs, Tinit_flat, weights, geoms_init, plan_nearfar, plan_PSF, directory, opt_date, parallel)
+    println("######################### pre optimizing alpha #########################")
+    println()
+    flush(stdout)
+    
+    pp = params_init.pp
+    imgp = params_init.imgp
+    optp = params_init.optp
+    recp = params_init.recp
+    
+    directory_save = "$(directory)/pre_optimize_alpha"
+    Base.Filesystem.mkdir( directory_save )
+    
+    #file for saving objective vals
+    file_save_objective_vals = "$(directory_save)/objective_vals.csv"   
+
+    #file for saving alpha vals
+    file_save_alpha_vals = "$(directory_save)/alpha_vals"  
+    
+    if parallel
+        fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    else
+        fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    end
+    
+    #assume random Tmap
+    Tmap = prepare_objects(imgp, pp)[1]
+    noise = prepare_noise(imgp)
+
+    B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
+    image_Tmap_grid_noiseless = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    image_Tmap_grid = image_Tmap_grid_noiseless  .+ mean(image_Tmap_grid_noiseless).*noise
+    
+    function objective(α)
+        Test_flat, _, _ = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel, false, false)
+        sum((Tmap[:] .- Test_flat).^2) / sum(Tmap.^2), Test_flat
+    end
+
+    function dloss_dα(α, Test_flat)  
+        term1plusterm2_hessian = term1plusterm2_hes(α, pp, imgp, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, image_Tmap_grid, parallel);
+        H = Hes(pp.orderfreq + 1, pp.wavcen, imgp.objL, imgp.imgL, term1plusterm2_hessian, fftPSFs, freqs, Test_flat, plan_nearfar, plan_PSF, weights, pp.blackbody_scaling, parallel)
+        b = 2 * (Tmap[:] - Test_flat) / (Tmap[:]' * Tmap[:])
+
+        lambda = zeros(typeof(freqs[1]), imgp.objL^2)
+        lambda, ch = cg!(lambda, H, b, log=true, maxiter = optp.cg_maxiter_factor * imgp.objL^2);
+
+        grad = 2 * (lambda' * (Test_flat .- recp.subtract_reg ) )
+    end
+    
+    function myfunc(params, grad)
+        α = params[1]
+        obj, Test_flat = objective(α)
+
+        if length(grad) > 0
+            grad[1] = dloss_dα(α, Test_flat)  
+        end
+
+        open(file_save_objective_vals, "a") do io
+            writedlm(io, obj, ',')
+        end
+        open(file_save_alpha_vals, "a") do io
+            writedlm(io, α, ',')
+        end
+
+        obj
+    end
+    
+    opt = Opt(:LD_MMA, 1)
+    opt.lower_bounds = 0
+    opt.min_objective = myfunc
+    opt.ftol_rel = 1e-10
+    opt.maxeval = 500
+
+    (minf,minparams,ret) = NLopt.optimize(opt, [optp.αinit ,])
+    
+    println("######################### done pre optimizing alpha (ret = $(ret)) #########################")
+    println()
+    flush(stdout)
+
+    minα = minparams[1]
+    
+    αvals = readdlm(file_save_alpha_vals,',')
+    objvals = readdlm(file_save_objective_vals,',')
+    
+    figure(figsize=(18,5))
+    subplot(1,2,1)
+    plot(1:length(αvals), αvals, ".-")
+    title("alpha values")
+    xlabel("iter")
+    subplot(1,2,2)
+    semilogy(1:length(αvals), αvals, ".-")
+    title("alpha values")
+    xlabel("iter")
+    tight_layout()
+    savefig("$(directory_save)/alpha_vals.png")
+
+    figure(figsize=(18,5))
+    subplot(1,2,1)
+    plot(1:length(objvals), objvals, ".-")
+    title("objective values")
+    xlabel("iter")
+    subplot(1,2,2)
+    semilogy(1:length(objvals), objvals, ".-")
+    title("objective values")
+    xlabel("iter")
+    tight_layout()
+    savefig("$(directory_save)/objective_vals.png")
+
+    plot_reconstruction_fixed_noise_levels(opt_date, directory_save, params_init, freqs, Tinit_flat, Tmap, [imgp.noise_level;], plan_nearfar, plan_PSF, weights, fftPSFs, minα, parallel, SSIM(KernelFactors.gaussian(1.5, 11), (1,1,1)), "initial_alpha_optimized", "random")
+    
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, (imgp.lbT + imgp.ubT)/2, imgp.lbT + (imgp.ubT - imgp.lbT)*(3/4) )
+    plot_reconstruction_fixed_noise_levels(opt_date, directory_save, params_init, freqs, Tinit_flat, Tmap_MIT, [imgp.noise_level;], plan_nearfar, plan_PSF, weights, fftPSFs, minα, parallel, SSIM(KernelFactors.gaussian(1.5, 11), (1,1,1)), "initial_alpha_optimized", "MIT")
+    
+    minα
+end
+
 #assumes only one Tmap in the test set
 function compute_test_obj(params_opt, params_init, Tmap, freqs, surrogates, Tinit_flat, weights, noise_multiplier, plan_nearfar, plan_PSF, parallel)
     pp = params_init.pp
@@ -946,6 +1064,7 @@ function compute_test_obj(params_opt, params_init, Tmap, freqs, surrogates, Tini
         geoms = reshape(params_opt[1:end-1], pp.gridL, pp.gridL)
         α = params_opt[end] / optp.α_scaling
     else
+        #TO DO: get rid of this case? or add pre-optimizing alpha case here?
         geoms = reshape(params_opt, pp.gridL, pp.gridL)
         α = optp.αinit
     end
@@ -981,6 +1100,7 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
         geoms = reshape(params_opt[1:end-1], pp.gridL, pp.gridL)
         α = params_opt[end] / optp.α_scaling
     else
+        #TO DO: get rid of this case? or add pre-optimizing alpha case here?
         geoms = reshape(params_opt, pp.gridL, pp.gridL)
         α = optp.αinit
     end
@@ -1071,12 +1191,6 @@ function run_opt(pname, presicion, parallel, opt_date)
     else
         noise_multiplier = prepare_noise_multiplier(pp, imgp, surrogates, freqs, weights, plan_nearfar, plan_PSF, parallel)
     end
-        
-    if optp.optimize_alpha
-        params_opt = [geoms_init[:]; optp.α_scaling * optp.αinit]
-    else
-        params_opt = geoms_init[:]
-    end
     
     #prepare opt files
     lblambda = pp.wavcen / pp.ubfreq 
@@ -1086,6 +1200,19 @@ function run_opt(pname, presicion, parallel, opt_date)
     #opt_id = @sprintf("%s_geoms_%s_%d_%d_%d_batchsize_%d_alphainit_%.1e_maxeval_%d_diffnoise_%s", opt_date, optp.geoms_init_type, imgp.objL, imgp.imgL, pp.gridL, imgp.objN, optp.αinit, optp.maxeval, imgp.differentiate_noise)
     directory = "ImagingOpt.jl/optdata/$(opt_id)"
     Base.Filesystem.mkdir( directory )
+    
+   #if pre-optimize alpha is true, do this here
+    if optp.pre_optimize_alpha
+        αinit = pre_optimize_alpha(params_init, surrogates, freqs, Tinit_flat, weights, geoms_init, plan_nearfar, plan_PSF, directory, opt_date, parallel)
+    else
+        αinit = optp.αinit
+    end
+        
+    if optp.optimize_alpha
+        params_opt = [geoms_init[:]; optp.α_scaling * αinit]
+    else
+        params_opt = geoms_init[:]
+    end
     
     #save input parameters in json file
     open("$directory/$(pname)_$(opt_date).json", "w") do io
