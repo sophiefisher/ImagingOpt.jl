@@ -1005,7 +1005,7 @@ function pre_optimize_alpha(params_init, surrogates, freqs, Tinit_flat, weights,
     opt = Opt(:LD_MMA, 1)
     opt.lower_bounds = 0
     opt.min_objective = myfunc
-    opt.ftol_rel = 1e-10
+    opt.ftol_rel = 1e-12
     opt.maxeval = 500
 
     (minf,minparams,ret) = NLopt.optimize(opt, [optp.αinit ,])
