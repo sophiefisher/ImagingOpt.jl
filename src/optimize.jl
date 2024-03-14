@@ -952,7 +952,7 @@ function pre_optimize_alpha(params_init, surrogates, freqs, Tinit_flat, weights,
     file_save_objective_vals = "$(directory_save)/objective_vals.csv"   
 
     #file for saving alpha vals
-    file_save_alpha_vals = "$(directory_save)/alpha_vals"  
+    file_save_alpha_vals = "$(directory_save)/alpha_vals.csv"  
     
     if parallel
         fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
