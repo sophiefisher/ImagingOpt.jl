@@ -399,7 +399,7 @@ function dloss_dparams(pp, imgp, optp, recp, geoms, α, Tmap, B_Tmap_grid, Test_
         
     if optp.optimize_alpha
         grad[1:end-1] = jacobian_vp
-        grad[end] = 2 * (1/optp.α_scaling) * (lambda' * (Test_flat .- recp.subtract_reg ) )
+        grad[end] = 2 * (lambda' * (Test_flat .- recp.subtract_reg ) )
     else
         grad[1:end] = jacobian_vp
     end

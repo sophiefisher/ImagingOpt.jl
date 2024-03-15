@@ -1062,7 +1062,8 @@ function compute_test_obj(params_opt, params_init, Tmap, freqs, surrogates, Tini
 
     if optp.optimize_alpha
         geoms = reshape(params_opt[1:end-1], pp.gridL, pp.gridL)
-        α = params_opt[end] / optp.α_scaling
+        z = params_opt[end]
+        α = exp(z)
     else
         #TO DO: get rid of this case? or add pre-optimizing alpha case here?
         geoms = reshape(params_opt, pp.gridL, pp.gridL)
@@ -1098,7 +1099,8 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
 
     if optp.optimize_alpha
         geoms = reshape(params_opt[1:end-1], pp.gridL, pp.gridL)
-        α = params_opt[end] / optp.α_scaling
+        z = params_opt[end]
+        α = exp(z)
     else
         #TO DO: get rid of this case? or add pre-optimizing alpha case here?
         geoms = reshape(params_opt, pp.gridL, pp.gridL)
@@ -1146,6 +1148,10 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
 
         grad_obji, num_cg_iters = dloss_dparams(pp, imgp, optp, recp, geoms, α, Tmap, B_Tmap_grid, Test_flat, image_Tmap_grid, noise, fftPSFs, dsur_dg_times_incidents, far_fields, freqs, plan_nearfar, plan_PSF, weights, parallel)
         num_cg_iters_list[obji] = num_cg_iters
+        #update gradient for rescaling of alpha
+        if optp.optimize_alpha
+            grad_obji[end] = grad_obji[end] * α
+        end
         
         grad = grad + (1/imgp.objN) * grad_obji
     end
@@ -1209,7 +1215,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     end
         
     if optp.optimize_alpha
-        params_opt = [geoms_init[:]; optp.α_scaling * αinit]
+        params_opt = [geoms_init[:]; log(αinit) ]
     else
         params_opt = geoms_init[:]
     end
@@ -1316,12 +1322,12 @@ function run_opt(pname, presicion, parallel, opt_date)
 
         #save alpha val and best alpha val
         if optp.optimize_alpha
-            α = params_opt[end] / optp.α_scaling
+            α = exp(params_opt[end])
             open(file_save_alpha_vals, "a") do io
                 writedlm(io, α, ',')
             end
             
-            α_best = params_opt_best[end] / optp.α_scaling
+            α_best = exp(params_opt_best[end]) 
             open(file_save_best_alpha_vals, "a") do io
                 writedlm(io, α_best, ',')
             end
@@ -1399,7 +1405,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     
         setup, params_opt = Optimisers.update(setup, params_opt, grad)
         params_opt[1:end-1] = (x -> clamp(x, pp.lbwidth, pp.ubwidth)).(params_opt[1:end-1])
-        params_opt[end] = clamp(params_opt[end], optp.α_lb * optp.α_scaling, Inf)
+        #params_opt[end] = clamp(params_opt[end], optp.α_lb * optp.α_scaling, Inf)
     end
     println()
 
