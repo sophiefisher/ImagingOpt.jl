@@ -157,8 +157,6 @@ end
 
 
 function design_polychromatic_lens(pname, presicion, parallel, opt_date, maxeval = 1000, xtol_rel = 1e-8, ineq_tol = 1e-8)
-    #assumes there are 21 PSFs!
-    
     params = get_params(pname, presicion)
     pp = params.pp
     imgp = params.imgp
@@ -193,11 +191,17 @@ function design_polychromatic_lens(pname, presicion, parallel, opt_date, maxeval
     middle = div(psfL,2)
     nF = pp.orderfreq + 1
     
-    middle_freq_idx = 11
+    middle_freq_idx = pp.orderfreq÷2 + 1
     freqs_idx_1 = 1
-    freq_idx_2 = 8
-    freq_idx_3 = 14
-    freq_idx_4 = 21
+
+    ideal_lower_freq = (freqs[end] - freqs[1])/4 + freqs[1]
+    freq_idx_2 = findmin(abs.(freqs.-ideal_lower_freq))[2]
+
+    ideal_higher_freq = freqs[end] - (freqs[end] - freqs[1])/4 
+    freq_idx_3 = findmin(abs.(freqs.-ideal_higher_freq))[2]
+
+    freq_idx_4 = nF
+
     freq_idx_list = [freqs_idx_1, freq_idx_2, freq_idx_3, freq_idx_4, middle_freq_idx]
     
     offset = Int(floor(3*div(imgp.imgL,8)))
@@ -297,14 +301,14 @@ function design_polychromatic_lens(pname, presicion, parallel, opt_date, maxeval
     title("optimized metasurface \n parameters")
     savefig("$directory/geoms_$(opt_id).png")
 
-    #plot PSFs (make sure there are only 21 of them)
+    #plot PSFs (make sure there are not more than 21 of them)
     if parallel
         PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
     else
         PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
     end
     figure(figsize=(20,9))
-    for i = 1:21
+    for i = 1:pp.orderfreq+1
         subplot(3,7,i)
         imshow(PSFs[i])
         colorbar()
@@ -474,7 +478,7 @@ function design_multifocal_lens(pname, presicion, parallel, opt_date, maxeval = 
         PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
     end
     figure(figsize=(20,9))
-    for i = 1:21
+    for i = 1:pp.orderfreq+1
         subplot(3,7,i)
         imshow(PSFs[i])
         colorbar()
@@ -634,14 +638,14 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date, maxeval = 
     title("optimized metasurface \n parameters")
     savefig("$directory/geoms_$(opt_id).png")
 
-    #plot PSFs (make sure there are only 21 of them)
+    #plot PSFs (make sure there are not more than 21 of them)
     if parallel
         PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
     else
         PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
     end
     figure(figsize=(20,9))
-    for i = 1:21
+    for i = 1:pp.orderfreq+1
         subplot(3,7,i)
         imshow(PSFs[i])
         colorbar()
@@ -781,14 +785,14 @@ function design_singlefreq_lens_NLOPT(pname, presicion, parallel, opt_date, xtol
     title("optimized metasurface \n parameters")
     savefig("$directory/geoms_singlefreq_lens_$(opt_id).png")
 
-    #plot PSFs (make sure there are only 21 of them)
+    #plot PSFs (make sure there are not more than 21 of them)
     if parallel
         PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
     else
         PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
     end
     figure(figsize=(20,9))
-    for i = 1:21
+    for i = 1:pp.orderfreq+1
         subplot(3,7,i)
         imshow(PSFs[i])
         colorbar()
@@ -915,14 +919,14 @@ function design_singlefreq_lens_OPTIM(pname, presicion, parallel, opt_date, oute
     title("optimized metasurface \n parameters")
     savefig("$directory/geoms_singlefreq_lens_$(opt_id).png")
 
-    #plot PSFs (make sure there are only 21 of them)
+    #plot PSFs (make sure there are not more than 21 of them)
     if parallel
         PSFs = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
     else
         PSFs = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, parallel),1:pp.orderfreq+1)
     end
     figure(figsize=(20,9))
-    for i = 1:21
+    for i = 1:pp.orderfreq+1
         subplot(3,7,i)
         imshow(PSFs[i])
         colorbar()
