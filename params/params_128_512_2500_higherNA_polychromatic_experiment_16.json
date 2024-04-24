@@ -45,7 +45,7 @@
     },
     "optp": {
         "geoms_init_type":"load",
-        "geoms_init_loadfilename":"geoms_2024-02-13T23:33:02.629_polychromatic_8.0_14.0_20_4.0_2500_640_128_512_3_500_1.0e-12_1.0e-8.csv",
+        "geoms_init_loadfilename":"geoms_2024-04-22T20:51:19.760_polychromatic_8.0_11.0_16_4.0_2500_640_128_512_3_500_1.0e-8_1.0e-8.csv",
         "geoms_init_loadsavename":"polychromatic_higherNA",
         "αinit":1e-4,
         "α_scaling":1,
