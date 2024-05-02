@@ -39,6 +39,15 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     Tmaps_MIT = [ Tmap_MIT ]
     noises_MIT = [ prepare_noise(imgp); ]
     
+    nF = pp.orderfreq + 1
+    middle_freq_idx = pp.orderfreq÷2 + 1
+    freqs_idx_1 = 1
+    ideal_lower_freq = (freqs[end] - freqs[1])/4 + freqs[1]
+    freq_idx_2 = findmin(abs.(freqs.-ideal_lower_freq))[2]
+    ideal_higher_freq = freqs[end] - (freqs[end] - freqs[1])/4 
+    freq_idx_3 = findmin(abs.(freqs.-ideal_higher_freq))[2]
+    freq_idx_4 = nF
+    
     ################################# plot objective, alpha, and noise values throughout opt #################################
     println("######################### plotting objective and alpha values #########################")
     println()
@@ -674,16 +683,16 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     end
     
     #initial
-    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_initial_reconstructions_directory, params, PSFs_init, freqs, [1; 11; 21], Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_init, parallel, iqi, "initial", "random")
-    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_initial_reconstructions_directory, params, PSFs_init, freqs, [1; 11; 21], Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_init, parallel, iqi, "initial", "MIT")
-    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_initial_reconstructions_directory, params, PSFs_init, freqs, [1; 8; 11; 14; 21], Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_init, parallel, iqi, "initial", "random")
-    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_initial_reconstructions_directory, params, PSFs_init, freqs, [1; 8; 11; 14; 21], Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_init, parallel, iqi, "initial", "MIT")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_initial_reconstructions_directory, params, PSFs_init, freqs, [1; middle_freq_idx; freq_idx_4], Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_init, parallel, iqi, "initial", "random")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_initial_reconstructions_directory, params, PSFs_init, freqs, [1; middle_freq_idx; freq_idx_4], Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_init, parallel, iqi, "initial", "MIT")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_initial_reconstructions_directory, params, PSFs_init, freqs, [1; freq_idx_2; middle_freq_idx; freq_idx_3; freq_idx_4], Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_init, parallel, iqi, "initial", "random")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_initial_reconstructions_directory, params, PSFs_init, freqs, [1; freq_idx_2; middle_freq_idx; freq_idx_3; freq_idx_4], Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_init, parallel, iqi, "initial", "MIT")
     
     #optimized
-    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_optimized_reconstructions_directory, params, PSFs_optimized, freqs, [1; 11; 21], Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_optimized, parallel, iqi, "optimized", "random")
-    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_optimized_reconstructions_directory, params, PSFs_optimized, freqs, [1; 11; 21], Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_optimized, parallel, iqi, "optimized", "MIT")
-    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_optimized_reconstructions_directory, params, PSFs_optimized, freqs, [1; 8; 11; 14; 21], Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_optimized, parallel, iqi, "optimized", "random")
-    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_optimized_reconstructions_directory, params, PSFs_optimized, freqs, [1; 8; 11; 14; 21], Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_optimized, parallel, iqi, "optimized", "MIT")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_optimized_reconstructions_directory, params, PSFs_optimized, freqs, [1; middle_freq_idx; freq_idx_4], Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_optimized, parallel, iqi, "optimized", "random")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_optimized_reconstructions_directory, params, PSFs_optimized, freqs, [1; middle_freq_idx; freq_idx_4], Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_optimized, parallel, iqi, "optimized", "MIT")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_optimized_reconstructions_directory, params, PSFs_optimized, freqs, [1; freq_idx_2; middle_freq_idx; freq_idx_3; freq_idx_4], Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_optimized, parallel, iqi, "optimized", "random")
+    plot_reconstruction_fixed_noise_levels_interpolated_PSFs(opt_date, interpolated_PSFs_optimized_reconstructions_directory, params, PSFs_optimized, freqs, [1; freq_idx_2; middle_freq_idx; freq_idx_3; freq_idx_4], Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, α_optimized, parallel, iqi, "optimized", "MIT")
     
 end
 
@@ -1040,8 +1049,8 @@ function plot_PSFs(opt_date, directory, params, freqs, PSFs, parallel, geoms_typ
     minval = minimum(minimum.(PSFs_cropped))
     
     figure(figsize=(18,11))
-    #assumes 21 PSFs
-    for i = 1:21
+    #assumes no more than 21 PSFs
+    for i = 1:pp.orderfreq+1
         subplot(3,7,i)
         if scaling == "different_linear"
             imshow(PSFs_cropped[i])
@@ -1087,8 +1096,8 @@ function plot_PSF_midlines(opt_date, directory, params, freqs, PSFs_diff, PSFs, 
     
     figure(figsize=(18,10))
     suptitle("PSF midlines for ideal geometry (blue) and $(geoms_type) geometry (orange)")
-    #assumes 21 PSFs
-    for i = 1:21
+    #assumes no more than 21 PSFs
+    for i = 1:pp.orderfreq+1
         subplot(3,7,i)
         if scaling == "different_linear"
             plot(xvals, mid_lines_diff[i],".-")
@@ -1144,7 +1153,7 @@ end
 
 #TO DO: take PSFs as input so you don't have to recompute each time
 function plot_PSFs_figure(pp, imgp, freqs, PSFs, parallel, directory, cropfactor=1, scaling = "different_linear",show_colorbar=false)
-    #plot PSFs (make sure there are only 21 of them)
+    #plot PSFs (make sure there are no more than 21 of them)
     psfL = imgp.objL + imgp.imgL
     
     PSF_function = iF->PSFs[iF][(psfL ÷ 2) - (psfL ÷ cropfactor ÷ 2) + 1 : (psfL ÷ 2) + (psfL ÷ cropfactor ÷ 2), (psfL ÷ 2) - (psfL ÷ cropfactor ÷ 2) + 1 : (psfL ÷ 2) + (psfL ÷ cropfactor ÷ 2) ]
@@ -1162,7 +1171,7 @@ function plot_PSFs_figure(pp, imgp, freqs, PSFs, parallel, directory, cropfactor
     else
         fig = figure(figsize=(12,6))
     end
-    for i = 1:21
+    for i = 1:pp.orderfreq+1
         subplot(3,7,i)
         if scaling == "different_linear"
             imshow(PSFs_cropped[i])
