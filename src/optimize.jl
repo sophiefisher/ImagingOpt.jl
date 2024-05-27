@@ -160,6 +160,7 @@ function design_polychromatic_lens(pname, presicion, parallel, opt_date, maxeval
     params = get_params(pname, presicion)
     pp = params.pp
     imgp = params.imgp
+    recp = params.recp
     
     lblambda = pp.wavcen / pp.ubfreq 
     ublambda = pp.wavcen / pp.lbfreq 
@@ -317,6 +318,24 @@ function design_polychromatic_lens(pname, presicion, parallel, opt_date, maxeval
     end
     tight_layout()
     savefig("$directory/PSFs_$opt_date.png")
+
+    #test reconstruction
+    iqi = SSIM(KernelFactors.gaussian(1.5, 11), (1,1,1)) #standard parameters for SSIM
+    Tinit_flat = prepare_reconstruction(recp, imgp)
+    Tmaps_random = prepare_objects(imgp, pp) #assuming random Tmaps
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, (imgp.lbT + imgp.ubT)/2, imgp.lbT + (imgp.ubT - imgp.lbT)*(3/4) )
+    weights = prepare_weights(pp)
+    if parallel
+        fftPSFs_init = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    else
+        fftPSFs_init = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    end
+
+    α = pre_optimize_alpha(params, surrogates, freqs, Tinit_flat, weights, geoms, plan_nearfar, plan_PSF, directory, opt_date, parallel)
+
+    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "random")
+    
+    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "MIT")
 
     geoms
 end
@@ -497,6 +516,7 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date, maxeval = 
     params = get_params(pname, presicion)
     pp = params.pp
     imgp = params.imgp
+    recp = params.recp
     
     #prepare opt files
     lblambda = pp.wavcen / pp.ubfreq 
@@ -656,6 +676,24 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date, maxeval = 
     end
     tight_layout()
     savefig("$directory/PSFs_$opt_date.png")
+
+    #test reconstruction
+    iqi = SSIM(KernelFactors.gaussian(1.5, 11), (1,1,1)) #standard parameters for SSIM
+    Tinit_flat = prepare_reconstruction(recp, imgp)
+    Tmaps_random = prepare_objects(imgp, pp) #assuming random Tmaps
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, (imgp.lbT + imgp.ubT)/2, imgp.lbT + (imgp.ubT - imgp.lbT)*(3/4) )
+    weights = prepare_weights(pp)
+    if parallel
+        fftPSFs_init = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    else
+        fftPSFs_init = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+    end
+
+    α = pre_optimize_alpha(params, surrogates, freqs, Tinit_flat, weights, geoms, plan_nearfar, plan_PSF, directory, opt_date, parallel)
+
+    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "random")
+    
+    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "MIT")
 
     geoms
 
