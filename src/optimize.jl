@@ -185,7 +185,7 @@ function design_polychromatic_lens(pname, presicion, parallel, opt_date, maxeval
     file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"  
 
     surrogates, freqs = prepare_surrogate(pp)
-    plan_nearfar, _ = prepare_fft_plans(pp, imgp)
+    plan_nearfar, plan_PSF = prepare_fft_plans(pp, imgp)
     geoms_init = fill((pp.lbwidth + pp.ubwidth)/2, pp.gridL^2)
 
     psfL = imgp.objL + imgp.imgL
@@ -542,7 +542,7 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date, maxeval = 
     file_save_objective_vals = "$directory/objective_vals_$opt_date.csv"  
 
     surrogates, freqs = prepare_surrogate(pp)
-    plan_nearfar, _ = prepare_fft_plans(pp, imgp)
+    plan_nearfar, plan_PSF = prepare_fft_plans(pp, imgp)
 
     geoms_init = fill((pp.lbwidth + pp.ubwidth)/2, pp.gridL^2)
 
