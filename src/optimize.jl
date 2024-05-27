@@ -210,7 +210,8 @@ function design_polychromatic_lens(pname, presicion, parallel, opt_date, maxeval
     
     function get_PSF_offset_center(freq, surrogate, geoms, xoffset, yoffset)
         PSF = get_PSF(freq, surrogate, pp, imgp, geoms, plan_nearfar, parallel)
-        PSF[middle + yoffset, middle + xoffset] + PSF[middle+1+ yoffset,middle+ xoffset] + PSF[middle+ yoffset,middle+1+ xoffset] + PSF[middle+1+ yoffset,middle+1+ xoffset]
+        #PSF[middle + yoffset, middle + xoffset] + PSF[middle+1+ yoffset,middle+ xoffset] + PSF[middle+ yoffset,middle+1+ xoffset] + PSF[middle+1+ yoffset,middle+1+ xoffset]
+        PSF[middle + yoffset, middle + xoffset]
     end
     
     t_init = minimum(1:length(freq_idx_list)) do i
@@ -531,7 +532,8 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date, maxeval = 
 
     t_init = minimum(1:nF) do iF
         PSF = get_PSF(freqs[iF], surrogates[iF], pp, imgp, reshape(geoms_init,pp.gridL,pp.gridL), plan_nearfar, parallel)
-        PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1]
+        #PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1]
+        PSF[middle,middle]
     end
     x_init = [geoms_init[:]; t_init]
 
@@ -565,7 +567,8 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date, maxeval = 
 
     function get_PSF_center(freq, surrogate, geoms)
         PSF = get_PSF(freq, surrogate, pp, imgp, geoms, plan_nearfar, parallel)
-        PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1]
+        #PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1]
+        PSF[middle,middle]
     end
 
     function myconstraint(x::Vector, grad::Vector, iF)
@@ -704,7 +707,8 @@ function design_singlefreq_lens_NLOPT(pname, presicion, parallel, opt_date, xtol
     function objective(parameters)
         geoms_grid = reshape(parameters, pp.gridL, pp.gridL)
         PSF = get_PSF(freq, surrogate, pp, imgp, geoms_grid, plan_nearfar, parallel)
-        obj = (PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1])
+        #obj = (PSF[middle,middle] + PSF[middle+1,middle] + PSF[middle,middle+1] + PSF[middle+1,middle+1])
+        obj = PSF[middle,middle]
     end
 
 
