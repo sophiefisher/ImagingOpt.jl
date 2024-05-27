@@ -667,6 +667,7 @@ function design_singlefreq_lens_NLOPT(pname, presicion, parallel, opt_date, xtol
     params = get_params(pname, presicion)
     pp = params.pp
     imgp = params.imgp
+    recp = params.recp
     
     #prepare opt files
     lblambda = pp.wavcen / pp.ubfreq 
