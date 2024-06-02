@@ -68,6 +68,8 @@ struct ImagingParams{FloatType <: AbstractFloat, IntType <: Signed}
     noise_level::FloatType
     emiss_noise_level::FloatType
     differentiate_noise::Bool
+    noise_multiplier_type::String
+    noise_multiplier_loadfilename::String
 end
 
 struct OptimizeParams{FloatType <: AbstractFloat, IntType <: Signed}
@@ -289,15 +291,26 @@ end
 function prepare_noise_multiplier(pp::PhysicsParams, imgp::ImagingParams, surrogates, freqs, weights, plan_nearfar, plan_PSF, parallel::Bool=true)
     Tmap = prepare_objects(imgp, pp)[1]
     B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
-    get_fftPSF_freespace_iF = iF->get_fftPSF_freespace(freqs[iF], surrogates[iF], pp, imgp, plan_nearfar, plan_PSF)
-    if parallel
-        fftPSFs_freespace = ThreadsX.map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
-    else
-        fftPSFs_freespace = map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
-    end
-    image_Tmap_grid_freespace = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs_freespace, freqs, weights, plan_nearfar, plan_PSF, parallel)
     
-    mean(image_Tmap_grid_freespace)
+    if imgp.noise_multiplier_type = "freespace"
+        get_fftPSF_freespace_iF = iF->get_fftPSF_freespace(freqs[iF], surrogates[iF], pp, imgp, plan_nearfar, plan_PSF)
+        if parallel
+            fftPSFs = ThreadsX.map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
+        else
+            fftPSFs = map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
+        end
+    elseif imgp.noise_multiplier_type = "load"
+        filename = @sprintf("ImagingOpt.jl/geomsdata/%s",imgp.noise_multiplier_loadfilename)
+        geoms = reshape(readdlm(filename,',',Float64),pp.gridL,pp.gridL)
+        if parallel
+            fftPSFs = ThreadsX.map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+        else
+            fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
+        end
+    end
+    
+    image_Tmap_grid = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    return mean(image_Tmap_grid)
 end
 
 function prepare_weights(pp::PhysicsParams)
