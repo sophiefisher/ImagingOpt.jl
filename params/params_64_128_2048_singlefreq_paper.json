@@ -59,7 +59,7 @@
         "cg_maxiter_factor":4,
         "pre_optimize_alpha":true,
         "optimize_alpha":true,
-        "η": 1e-3,
+        "η": 1e-2,
         "eval_test_data":true
         
     },
