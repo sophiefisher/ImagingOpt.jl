@@ -292,14 +292,14 @@ function prepare_noise_multiplier(pp::PhysicsParams, imgp::ImagingParams, surrog
     Tmap = prepare_objects(imgp, pp)[1]
     B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
     
-    if imgp.noise_multiplier_type = "freespace"
+    if imgp.noise_multiplier_type == "freespace"
         get_fftPSF_freespace_iF = iF->get_fftPSF_freespace(freqs[iF], surrogates[iF], pp, imgp, plan_nearfar, plan_PSF)
         if parallel
             fftPSFs = ThreadsX.map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
         else
             fftPSFs = map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
         end
-    elseif imgp.noise_multiplier_type = "load"
+    elseif imgp.noise_multiplier_type == "load"
         filename = @sprintf("ImagingOpt.jl/geomsdata/%s",imgp.noise_multiplier_loadfilename)
         geoms = reshape(readdlm(filename,',',Float64),pp.gridL,pp.gridL)
         if parallel
