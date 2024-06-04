@@ -47,7 +47,7 @@
         "geoms_init_loadfilename":"geoms_2023-08-21T22_54_53.168.csv",
         "αinit":1,
         "α_scaling":1,
-        "maxeval":2000,
+        "maxeval":2,
         "xtol_rel":0,
         "cg_maxiter_factor":4,
         "optimize_alpha":true,

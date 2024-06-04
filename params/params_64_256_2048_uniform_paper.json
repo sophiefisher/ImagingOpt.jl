@@ -4,7 +4,7 @@
         "ubλ_μm":12,
         "orderλ":20,
         
-        "F_μm": 6000,
+        "F_μm": 20000,
         "depth_μm":10000000,
         "gridL": 2048,
         
@@ -42,12 +42,12 @@
         "emiss_noise_level":0.00,
         "differentiate_noise":false,
         "noise_multiplier_type":"load",
-        "noise_multiplier_loadfilename":"geoms_2024-06-02T00_06_02.106_NLOPT_singlefreq_lens_8.0_12.0_20_4.0_2048_640_64_128_1_1.0e-8_500.csv"
+        "noise_multiplier_loadfilename":"geoms_2024-06-04T07_22_52.805_NLOPT_singlefreq_lens_8.0_12.0_20_4.0_2048_640_96_128_1_1.0e-9_500.csv"
         
     },
     "optp": {
         "geoms_init_type":"uniform",
-        "geoms_init_loadfilename":"geoms_singlefreq_lens_2024-01-01T23_41_06.371_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_7.csv",
+        "geoms_init_loadfilename":"geoms_2024-06-04T07_22_52.805_NLOPT_singlefreq_lens_8.0_12.0_20_4.0_2048_640_96_128_1_1.0e-9_500.csv",
         "geoms_init_loadsavename":"uniform",
         "αinit":1e-3,
         "α_scaling":1,

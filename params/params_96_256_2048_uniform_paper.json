@@ -1,12 +1,12 @@
 {
     "pp": {
         "lbλ_μm":8,
-        "ubλ_μm":14,
+        "ubλ_μm":12,
         "orderλ":20,
         
-        "F_μm": 10000,
-        "depth_μm":4e6,
-        "gridL": 2500,
+        "F_μm": 20000,
+        "depth_μm":10000000,
+        "gridL": 2048,
         
         "cellL_μm":4,
         "lbwidth_μm":1.8,
@@ -29,9 +29,9 @@
     },
  
     "imgp": {
-        "objL": 128,
-        "imgL": 512,
-        "binL": 3,
+        "objL": 96,
+        "imgL": 256,
+        "binL": 1,
         "objN": 3,
         "object_type": "random",
         "lbT":263.15,
@@ -40,22 +40,26 @@
         "object_savefilestring":"random_280_310",
         "noise_level": 0.02,
         "emiss_noise_level":0.00,
-        "differentiate_noise":false
+        "differentiate_noise":false,
+        "noise_multiplier_type":"load",
+        "noise_multiplier_loadfilename":"geoms_2024-06-04T07_22_52.805_NLOPT_singlefreq_lens_8.0_12.0_20_4.0_2048_640_96_128_1_1.0e-9_500.csv"
         
     },
     "optp": {
-        "geoms_init_type":"load",
-        "geoms_init_loadfilename":"geoms_2024-02-13T23:27:28.156_polychromatic_8.0_14.0_20_4.0_2500_640_128_512_3_500_1.0e-12_1.0e-8.csv",
-        "geoms_init_loadsavename":"polychromatic",
-        "αinit":1e-4,
+        "geoms_init_type":"uniform",
+        "geoms_init_loadfilename":"geoms_2024-06-04T07_22_52.805_NLOPT_singlefreq_lens_8.0_12.0_20_4.0_2048_640_96_128_1_1.0e-9_500.csv",
+        "geoms_init_loadsavename":"uniform",
+        "αinit":1e-3,
         "α_scaling":1,
-        "α_lb":1e-7,
+        "α_lb":0,
         "maxeval":6000,
         "saveeval":300,
         "xtol_rel":0,
         "cg_maxiter_factor":4,
+        "pre_optimize_alpha":true,
         "optimize_alpha":true,
-        "η": 1e-3
+        "η": 1e-2,
+        "eval_test_data":true
         
     },
     "recp": {

@@ -49,11 +49,14 @@
         "geoms_init_loadsavename":"test",
         "αinit":1e-3,
         "α_scaling":1,
-        "maxeval":10,
+        "α_lb":1e-5,
+        "maxeval":100,
+        "saveeval":10,
         "xtol_rel":0,
         "cg_maxiter_factor":4,
         "optimize_alpha":true,
-        "η": 1e-3
+        "η": 1e-3,
+        "eval_test_data":true
         
     },
     "recp": {

@@ -51,7 +51,6 @@
         "xtol_rel":0,
         "cg_maxiter_factor":4,
         "optimize_alpha":true,
-        "stochastic":true,
         "η": 1e-3
         
     },
