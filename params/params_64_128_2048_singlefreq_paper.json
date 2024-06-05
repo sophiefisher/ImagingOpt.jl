@@ -50,7 +50,7 @@
         "geoms_init_type":"load",
         "geoms_init_loadfilename":"geoms_2024-06-04T07_22_52.805_NLOPT_singlefreq_lens_8.0_12.0_20_4.0_2048_640_96_128_1_1.0e-9_500.csv",
         "geoms_init_loadsavename":"singlefreq",
-        "αinit":1e-3,
+        "αinit":1e-7,
         "α_scaling":1,
         "α_lb":0,
         "maxeval":6000,
