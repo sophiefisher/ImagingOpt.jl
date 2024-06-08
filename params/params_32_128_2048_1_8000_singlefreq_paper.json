@@ -30,7 +30,7 @@
  
     "imgp": {
         "objL": 32,
-        "imgL": 64,
+        "imgL": 128,
         "binL": 1,
         "objN": 3,
         "object_type": "random",
@@ -46,9 +46,9 @@
         
     },
     "optp": {
-        "geoms_init_type":"uniform",
+        "geoms_init_type":"load",
         "geoms_init_loadfilename":"geoms_2024-06-07T07_18_55.011_NLOPT_singlefreq_lens_8.0_12.0_20_4.0_2048_640_64_128_3_1.0e-9_500.csv",
-        "geoms_init_loadsavename":"uniform",
+        "geoms_init_loadsavename":"singlefreq",
         "αinit":1e-7,
         "α_scaling":1,
         "α_lb":0,
@@ -56,7 +56,7 @@
         "saveeval":300,
         "xtol_rel":0,
         "cg_maxiter_factor":4,
-        "pre_optimize_alpha":false,
+        "pre_optimize_alpha":true,
         "optimize_alpha":true,
         "η": 1e-2,
         "eval_test_data":true
