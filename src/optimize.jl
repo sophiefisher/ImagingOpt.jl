@@ -1283,7 +1283,8 @@ function run_opt(pname, presicion, parallel, opt_date)
     end
         
     if optp.optimize_alpha
-        params_opt = [geoms_init[:]; log(αinit) ]
+        #params_opt = [geoms_init[:]; log(αinit) ]
+        params_opt = [geoms_init[:]; αinit ]
     else
         params_opt = geoms_init[:]
     end
