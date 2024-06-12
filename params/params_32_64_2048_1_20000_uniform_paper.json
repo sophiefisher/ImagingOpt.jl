@@ -40,7 +40,7 @@
         "object_savefilestring":"random_280_310",
         "noise_level": 0.02,
         "emiss_noise_level":0.00,
-        "differentiate_noise":false,
+        "differentiate_noise":true,
         "noise_multiplier_type":"load",
         "noise_multiplier_loadfilename":"geoms_2024-06-11T19_50_12.788_NLOPT_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_1_1.0e-9_500.csv"
         
