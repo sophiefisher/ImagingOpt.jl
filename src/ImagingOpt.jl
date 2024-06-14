@@ -7,7 +7,7 @@ prepare_noise_multiplier, prepare_weights
     export nearfield, geoms_to_far, far_to_PSF, PSF_to_fftPSF, get_fftPSF, get_PSF, get_PSF_freespace, get_fftPSF_freespace, get_far, get_fftPSF_from_far, make_image_noiseless, make_image, reconstruct_object, reconstruct_object_optim,  reconstruction_objective, reconstruction_objective_simplified, gradient_reconstruction_T, gradient_reconstruction_T_autodiff,  get_image_diff_flat
     export dB_dT, d2B_dT2, Hes, term1plusterm2_hes, build_hessian, jacobian_vp_undiff, jacobian_vp_autodiff, jacobian_vp_manual, get_dsur_dg_times_incident, dloss_dparams
     export arrarr_to_multi
-    export get_params, print_params, get_α, compute_system_params, compute_obj_and_grad, run_opt, design_singlefreq_lens_NLOPT, design_singlefreq_lens_OPTIM, design_achromatic_lens, design_multifocal_lens, design_polychromatic_lens
+    export get_params, print_params, get_α, compute_system_params, compute_obj_and_grad, run_opt, design_singlefreq_lens_NLOPT, design_singlefreq_lens_OPTIM, design_achromatic_lens, design_multifocal_lens, design_polychromatic_lens, design_oscillatory_lens_NLOPT
     export process_opt, load_MIT_Tmap, plot_objective_vals, plot_reconstruction_fixed_noise_levels, plot_reconstruction_different_alpha_vals
 
     using FFTW
