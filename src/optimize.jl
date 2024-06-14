@@ -1012,7 +1012,7 @@ function design_oscillatory_lens(pname, presicion, parallel, opt_date, xtol_rel 
     lblambda = pp.wavcen / pp.ubfreq 
     ublambda = pp.wavcen / pp.lbfreq 
     unit_cell_length = pp.wavcen * pp.cellL
-    opt_id = "$(opt_date)_NLOPT_singlefreq_lens_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)_$(xtol_rel)_$(maxeval)"
+    opt_id = "$(opt_date)_NLOPT_oscillatory_lens_$(round(lblambda,digits=4))_$(round(ublambda,digits=4))_$(pp.orderfreq)_$(round(unit_cell_length,digits=4))_$(pp.gridL)_$(pp.orderwidth)_$(imgp.objL)_$(imgp.imgL)_$(imgp.binL)_$(xtol_rel)_$(maxeval)"
     directory = @sprintf("ImagingOpt.jl/geomsoptdata/%s", opt_id)
     Base.Filesystem.mkdir( directory )
     
