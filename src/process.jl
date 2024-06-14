@@ -54,37 +54,7 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     
     plot_objective_vals(directory, opt_date, "training")
     
-    if optp.optimize_alpha
-        file_save_alpha_vals = "$(directory)/alpha_vals_$(opt_date).csv"   
-        alpha_vals = readdlm(file_save_alpha_vals,',')
-        
-        figure(figsize=(18,10))
-        suptitle(L"\alpha \ \mathrm{values }")
-        subplot(2,2,1)
-        plot(alpha_vals,".-")
-        xlabel("iteration")
-        title("alpha values")
-
-        subplot(2,2,2)
-        semilogy(alpha_vals,".-")
-        xlabel("iteration")
-        title("alpha values (semilog plot)")
-        
-        file_save_best_alpha_vals = "$(directory)/best_alpha_vals_$(opt_date).csv"   
-        best_alpha_vals = readdlm(file_save_best_alpha_vals,',')
-        subplot(2,2,3)
-        plot(best_alpha_vals,".-",color="orange")
-        xlabel("iteration")
-        title("best alpha values")
-
-        subplot(2,2,4)
-        semilogy(best_alpha_vals,".-",color="orange")
-        xlabel("iteration")
-        title("best alpha values (semilog plot)")
-        
-        tight_layout()
-        savefig("$directory/alpha_vals_$opt_date.png")
-    end
+    plot_alpha_vals(directory, opt_date)
     
     file_relative_noise_levels = "$(directory)/relative_noise_levels_$(opt_date).csv"
     relative_noise_levels = readdlm(file_relative_noise_levels,',')
@@ -1332,4 +1302,36 @@ function plot_objective_vals(directory, opt_date, data_type="training")
 
     tight_layout()
     savefig("$(directory)/objective_vals_$(opt_date).png")
+end
+            
+function plot_alpha_vals(directory, opt_date)
+    file_save_alpha_vals = "$(directory)/alpha_vals_$(opt_date).csv"   
+    alpha_vals = readdlm(file_save_alpha_vals,',')
+
+    figure(figsize=(18,10))
+    suptitle(L"\alpha \ \mathrm{values }")
+    subplot(2,2,1)
+    plot(alpha_vals,".-")
+    xlabel("iteration")
+    title("alpha values")
+
+    subplot(2,2,2)
+    semilogy(alpha_vals,".-")
+    xlabel("iteration")
+    title("alpha values (semilog plot)")
+
+    file_save_best_alpha_vals = "$(directory)/best_alpha_vals_$(opt_date).csv"   
+    best_alpha_vals = readdlm(file_save_best_alpha_vals,',')
+    subplot(2,2,3)
+    plot(best_alpha_vals,".-",color="orange")
+    xlabel("iteration")
+    title("best alpha values")
+
+    subplot(2,2,4)
+    semilogy(best_alpha_vals,".-",color="orange")
+    xlabel("iteration")
+    title("best alpha values (semilog plot)")
+
+    tight_layout()
+    savefig("$directory/alpha_vals_$opt_date.png")
 end

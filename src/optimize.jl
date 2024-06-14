@@ -1638,6 +1638,7 @@ function run_opt(pname, presicion, parallel, opt_date)
             writedlm( "$(geoms_directory)/geoms_iter_$(iter)_$opt_date.csv",  params_opt_best[1:end-1],',')
             
             plot_objective_vals(directory, opt_date, "training")
+            plot_alpha_vals(directory, opt_date)
             
             if optp.eval_test_data
                 plot_objective_vals(directory_TEST, opt_date, "test")
