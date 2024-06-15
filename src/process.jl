@@ -55,6 +55,8 @@ function process_opt(presicion, parallel, opt_date, opt_id, pname)
     plot_objective_vals(directory, opt_date, "training")
     
     plot_alpha_vals(directory, opt_date)
+    file_save_best_alpha_vals = "$(directory)/best_alpha_vals_$(opt_date).csv"   
+    best_alpha_vals = readdlm(file_save_best_alpha_vals,',')
     
     file_relative_noise_levels = "$(directory)/relative_noise_levels_$(opt_date).csv"
     relative_noise_levels = readdlm(file_relative_noise_levels,',')
