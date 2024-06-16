@@ -1390,7 +1390,8 @@ function compute_obj_and_grad(params_opt, params_init, freqs, surrogates, Tinit_
         num_cg_iters_list[obji] = num_cg_iters
         #update gradient for rescaling of alpha
         if optp.optimize_alpha
-            grad_obji[end] = grad_obji[end] * (1/α)
+            #grad_obji[end] = grad_obji[end] * (1/α)
+            grad_obji[end] = grad_obji[end] * optp.α_scaling
         end
         
         grad = grad + (1/imgp.objN) * grad_obji
