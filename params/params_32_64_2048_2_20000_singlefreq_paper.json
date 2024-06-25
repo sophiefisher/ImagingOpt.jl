@@ -42,12 +42,12 @@
         "emiss_noise_level":0.00,
         "differentiate_noise":true,
         "noise_multiplier_type":"load",
-        "noise_multiplier_loadfilename":"hi"
+        "noise_multiplier_loadfilename":"geoms_2024-06-14T00_05_06.500_NLOPT_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_2_1.0e-9_500.csv"
         
     },
     "optp": {
         "geoms_init_type":"load",
-        "geoms_init_loadfilename":"hi",
+        "geoms_init_loadfilename":"geoms_2024-06-14T00_05_06.500_NLOPT_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_2_1.0e-9_500.csv",
         "geoms_init_loadsavename":"singlefreq",
         "αinit":1e-7,
         "α_scaling":1,
