@@ -1652,7 +1652,7 @@ function run_opt(pname, presicion, parallel, opt_date)
         end
     
         setup, params_opt = Optimisers.update(setup, params_opt, grad)
-        #params_opt[1:end-1] = (x -> clamp(x, pp.lbwidth, pp.ubwidth)).(params_opt[1:end-1])
+        params_opt[1:end-1] = (x -> clamp(x, pp.lbwidth, pp.ubwidth)).(params_opt[1:end-1])
         #params_opt[end] = clamp(params_opt[end], optp.α_lb * optp.α_scaling, Inf)
     end
     println()
