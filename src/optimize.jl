@@ -331,11 +331,11 @@ function design_polychromatic_lens(pname, presicion, parallel, opt_date, maxeval
         fftPSFs_init = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
     end
 
-    α = pre_optimize_alpha(params, surrogates, freqs, Tinit_flat, weights, geoms, plan_nearfar, plan_PSF, directory, opt_date, parallel)
+    #α = pre_optimize_alpha(params, surrogates, freqs, Tinit_flat, weights, geoms, plan_nearfar, plan_PSF, directory, opt_date, parallel)
 
-    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "random")
+    #plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "random")
     
-    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "MIT")
+    #plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "MIT")
 
     geoms
 end
@@ -689,11 +689,11 @@ function design_achromatic_lens(pname, presicion, parallel, opt_date, maxeval = 
         fftPSFs_init = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
     end
 
-    α = pre_optimize_alpha(params, surrogates, freqs, Tinit_flat, weights, geoms, plan_nearfar, plan_PSF, directory, opt_date, parallel)
+    #α = pre_optimize_alpha(params, surrogates, freqs, Tinit_flat, weights, geoms, plan_nearfar, plan_PSF, directory, opt_date, parallel)
 
-    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "random")
+    #plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "random")
     
-    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "MIT")
+    #plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "MIT")
 
     geoms
 
@@ -857,11 +857,11 @@ function design_singlefreq_lens_NLOPT(pname, presicion, parallel, opt_date, xtol
         fftPSFs_init = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
     end
 
-    α = pre_optimize_alpha(params, surrogates, freqs, Tinit_flat, weights, geoms, plan_nearfar, plan_PSF, directory, opt_date, parallel)
+    #α = pre_optimize_alpha(params, surrogates, freqs, Tinit_flat, weights, geoms, plan_nearfar, plan_PSF, directory, opt_date, parallel)
 
-    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "random")
+    #plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "random")
     
-    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "MIT")
+    #plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "MIT")
 
     geoms
 end
@@ -1158,11 +1158,11 @@ function design_oscillatory_lens(pname, presicion, parallel, opt_date, xtol_rel 
         fftPSFs_init = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
     end
 
-    α = pre_optimize_alpha(params, surrogates, freqs, Tinit_flat, weights, geoms, plan_nearfar, plan_PSF, directory, opt_date, parallel)
+    #α = pre_optimize_alpha(params, surrogates, freqs, Tinit_flat, weights, geoms, plan_nearfar, plan_PSF, directory, opt_date, parallel)
 
-    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "random")
+    #plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmaps_random[1], [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "random")
     
-    plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "MIT")
+    #plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap_MIT, [0.01; 0.02; 0.04; 0.05; 0.08; 0.10], plan_nearfar, plan_PSF, weights, fftPSFs_init, α, parallel, iqi, "initial", "MIT")
 
     geoms
 end
@@ -1171,7 +1171,7 @@ end
 
 
 
-function pre_optimize_alpha(params_init, surrogates, freqs, Tinit_flat, weights, geoms_init, plan_nearfar, plan_PSF, directory, opt_date, parallel)
+function pre_optimize_alpha(params_init, surrogates, freqs, Tinit_flat, weights, geoms_init, plan_nearfar, plan_PSF, directory, opt_date, parallel, differentiate_noise, noise_multiplier)
     println("######################### pre optimizing alpha #########################")
     println()
     flush(stdout)
@@ -1201,8 +1201,7 @@ function pre_optimize_alpha(params_init, surrogates, freqs, Tinit_flat, weights,
     noise = prepare_noise(imgp)
 
     B_Tmap_grid = prepare_blackbody(Tmap, freqs, imgp, pp)
-    image_Tmap_grid_noiseless = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
-    image_Tmap_grid = image_Tmap_grid_noiseless  .+ mean(image_Tmap_grid_noiseless).*noise
+    image_Tmap_grid = make_image(pp, imgp, differentiate_noise, B_Tmap_grid, fftPSFs, freqs, weights, noise, noise_multiplier, plan_nearfar, plan_PSF, parallel)
     
     function objective(α)
         Test_flat, _, _ = reconstruct_object(image_Tmap_grid, Tinit_flat, pp, imgp, optp, recp, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, α, false, false, parallel, false, false)
@@ -1450,7 +1449,7 @@ function run_opt(pname, presicion, parallel, opt_date)
     
    #if pre-optimize alpha is true, do this here
     if optp.pre_optimize_alpha
-        αinit = pre_optimize_alpha(params_init, surrogates, freqs, Tinit_flat, weights, geoms_init, plan_nearfar, plan_PSF, directory, opt_date, parallel)
+        αinit = pre_optimize_alpha(params_init, surrogates, freqs, Tinit_flat, weights, geoms_init, plan_nearfar, plan_PSF, directory, opt_date, parallel, imgp.differentiate_noise, noise_multiplier)
     else
         αinit = optp.αinit
     end
