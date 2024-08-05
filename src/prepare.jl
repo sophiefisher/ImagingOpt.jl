@@ -70,6 +70,7 @@ struct ImagingParams{FloatType <: AbstractFloat, IntType <: Signed}
     differentiate_noise::Bool
     noise_multiplier_type::String
     noise_multiplier_loadfilename::String
+    noise_multiplier::FloatType
 end
 
 struct OptimizeParams{FloatType <: AbstractFloat, IntType <: Signed}
@@ -299,6 +300,8 @@ function prepare_noise_multiplier(pp::PhysicsParams, imgp::ImagingParams, surrog
         else
             fftPSFs = map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
         end
+        image_Tmap_grid = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+        return mean(image_Tmap_grid)
     elseif imgp.noise_multiplier_type == "load"
         filename = @sprintf("ImagingOpt.jl/geomsdata/%s",imgp.noise_multiplier_loadfilename)
         geoms = reshape(readdlm(filename,',',Float64),pp.gridL,pp.gridL)
@@ -307,6 +310,10 @@ function prepare_noise_multiplier(pp::PhysicsParams, imgp::ImagingParams, surrog
         else
             fftPSFs = map(iF->get_fftPSF(freqs[iF], surrogates[iF], pp, imgp, geoms, plan_nearfar, plan_PSF, parallel),1:pp.orderfreq+1)
         end
+        image_Tmap_grid = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
+        return mean(image_Tmap_grid)
+    elseif imgp.noise_multiplier_type == "value"
+        return imgp.noise_multiplier
     end
     
     image_Tmap_grid = make_image_noiseless(pp, imgp, B_Tmap_grid, fftPSFs, freqs, weights, plan_nearfar, plan_PSF, parallel)
