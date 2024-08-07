@@ -1,3 +1,297 @@
+function process_opt2(presicion, parallel, opt_dat, opt_id, pname)
+    directory = "ImagingOpt.jl/optdata/$(opt_id)"
+    
+    MIT_reconstructions_directory = "ImagingOpt.jl/optdata/$(opt_id)/MIT_reconstructions"
+    if ! isdir(MIT_reconstructions_directory)
+        Base.Filesystem.mkdir(MIT_reconstructions_directory)
+    end
+    
+    random_reconstructions_directory = "ImagingOpt.jl/optdata/$(opt_id)/random_reconstructions"
+    if ! isdir(random_reconstructions_directory)
+        Base.Filesystem.mkdir(random_reconstructions_directory)
+    end
+    
+    PSFs_directory = "ImagingOpt.jl/optdata/$(opt_id)/more_PSFs"
+    if ! isdir(PSFs_directory)
+        Base.Filesystem.mkdir(PSFs_directory)
+    end
+    
+    params = get_params("$(pname)_$(opt_date)", presicion, directory)
+    pp = params.pp
+    imgp = params.imgp
+    optp = params.optp
+    recp = params.recp
+    surrogates, freqs = prepare_surrogate(pp)
+    Tinit_flat = prepare_reconstruction(recp, imgp)
+    plan_nearfar, plan_PSF = prepare_fft_plans(pp, imgp)
+    weights = prepare_weights(pp)
+    iqi = SSIM(KernelFactors.gaussian(1.5, 11), (1,1,1)) #standard parameters for SSIM
+    if imgp.differentiate_noise
+        noise_multiplier = 0
+    else
+        noise_multiplier = prepare_noise_multiplier(pp, imgp, surrogates, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    end
+    
+    Tmaps_random = prepare_objects(imgp, pp) #assuming random Tmaps    
+    Tmap_MIT = load_MIT_Tmap(imgp.objL, (imgp.lbT + imgp.ubT)/2, imgp.lbT + (imgp.ubT - imgp.lbT)*(3/4) )
+    
+    ################################# plot objective, alpha, and noise values throughout opt #################################
+    println("######################### plotting objective and alpha values #########################")
+    println()
+    
+    plot_objective_vals(directory, opt_date, "training")
+    
+    plot_alpha_vals(directory, opt_date)
+    file_save_best_alpha_vals = "$(directory)/best_alpha_vals_$(opt_date).csv"   
+    best_alpha_vals = readdlm(file_save_best_alpha_vals,',')
+    
+    file_relative_noise_levels = "$(directory)/relative_noise_levels_$(opt_date).csv"
+    relative_noise_levels = readdlm(file_relative_noise_levels,',')
+    figure(figsize=(12,6))
+    title("noise levels (relative to mean image) throughout optimization")
+    for obji = 1:imgp.objN
+        plot(relative_noise_levels[:,obji],".-")
+    end
+    ylabel("% of mean image value")
+    xlabel("iteration")
+    legend(["$(obji)" for obji = 1:imgp.objN])
+    tight_layout()
+    savefig("$(directory)/relative_noise_levels_$(opt_date).png")
+    
+    if optp.eval_test_data
+        directory_TEST = "$(directory)/test_data"
+        
+        #plot objective values
+        plot_objective_vals(directory_TEST, opt_date, "test")
+        
+        #plot relative noise values
+        file_relative_noise_levels_TEST = "$(directory_TEST)/relative_noise_levels_$(opt_date).csv"
+        relative_noise_levels_TEST = readdlm(file_relative_noise_levels_TEST,',')
+        figure(figsize=(12,6))
+        title("noise levels (relative to mean image) throughout optimization on test set")
+        plot(relative_noise_levels_TEST,".-")
+        ylabel("% of mean image value")
+        xlabel("iteration")
+        tight_layout()
+        savefig("$(directory_TEST)/relative_noise_levels_$(opt_date).png")
+        
+        #plot objective values of training and test set together
+        objdata_train = readdlm("$(directory)/objective_vals_$(opt_date).csv",',')
+        objdata_test = readdlm("$(directory_TEST)/objective_vals_$(opt_date).csv",',')
+        objdata_best_train = readdlm("$(directory)/best_objective_vals_$(opt_date).csv",',')
+        objdata_best_test = readdlm("$(directory_TEST)/best_objective_vals_$(opt_date).csv",',')
+        
+        figure(figsize=(18,10))
+        suptitle(L"\mathrm{objective \  data } ,  \langle \frac{|| T - T_{est} ||^2}{  || T ||^2} \rangle_{T},\mathrm{ training \ and \ test \ set}")
+        subplot(2,2,1)
+        plot(1:length(objdata_train), objdata_train,".-")
+        plot(1:length(objdata_test), objdata_test,".-")
+        xlabel("iteration")
+        title("objective values")
+        legend(["training set","test set"])
+
+        subplot(2,2,2)
+        semilogy(1:length(objdata_train), objdata_train,".-")
+        semilogy(1:length(objdata_test), objdata_test,".-")
+        xlabel("iteration")
+        title("objective values (semilog plot)")
+        legend(["training set","test set"])
+
+        subplot(2,2,3)
+        plot(1:length(objdata_best_train), objdata_best_train,".-")
+        plot(1:length(objdata_best_test), objdata_best_test,".-")
+        xlabel("iteration")
+        title("best objective values")
+        legend(["training set","test set"])
+
+        subplot(2,2,4)
+        semilogy(1:length(objdata_best_train), objdata_best_train,".-")
+        semilogy(1:length(objdata_best_test), objdata_best_test,".-")
+        xlabel("iteration")
+        title("best objective values (semilog plot)")
+        legend(["training set","test set"])
+
+        tight_layout()
+        savefig("$(directory_TEST)/objective_vals_train_and_test_$(opt_date).png")
+        
+        
+        #plot relative noise values of training and test set together
+        figure(figsize=(12,6))
+        title("noise levels (relative to mean image) throughout optimization, training and test set")
+        for obji = 1:imgp.objN
+            plot(relative_noise_levels[:,obji],".-")
+        end
+        plot(relative_noise_levels_TEST,".-")
+        ylabel("% of mean image value")
+        xlabel("iteration")
+        legend([["$(obji)" for obji = 1:imgp.objN]; "training object"])
+        tight_layout()
+        savefig("$(directory_TEST)/relative_noise_levels_$(opt_date).png")
+        
+    end
+    
+    ################################# INITIAL geoms, alpha, and PSFs #################################
+    #TO DO: if starting from random metasurface, save and then reload geoms here
+    println("######################### plotting initial PSFs, reconstructions #########################")
+    println()
+    
+    geoms_init = prepare_geoms(params)
+    
+    if parallel
+        PSFs_init = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, parallel),1:pp.orderfreq+1)
+    else
+        PSFs_init = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms_init, plan_nearfar, parallel),1:pp.orderfreq+1)
+    end
+    
+    if parallel
+        fftPSFs_init = ThreadsX.map(iF-> PSF_to_fftPSF(PSFs_init[iF], plan_PSF),1:pp.orderfreq+1)
+    else
+        fftPSFs_init = map(iF-> PSF_to_fftPSF(PSFs_init[iF], plan_PSF),1:pp.orderfreq+1)
+    end
+
+    α_init = best_alpha_vals[1]
+    
+    #plot initial PSFs
+    plot_PSFs(opt_date, directory, params, freqs, PSFs_init, parallel, "initial", 1, "different_linear")
+    plot_PSFs(opt_date, directory, params, freqs, PSFs_init, parallel, "initial", 1, "same_linear")
+    plot_PSFs(opt_date, directory, params, freqs, PSFs_init, parallel, "initial", 1, "same_log")
+    
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_init, parallel, "initial",2, "same_linear")
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_init, parallel, "initial",4, "same_linear")
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_init, parallel, "initial",8, "same_linear")
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_init, parallel, "initial",16, "same_linear")
+    
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_init, parallel, "initial",2, "same_log")
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_init, parallel, "initial",4, "same_log")
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_init, parallel, "initial",8, "same_log")
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_init, parallel, "initial",16, "same_log")
+    
+    noises_random = prepare_noises(imgp)
+    noises_MIT = [ prepare_noise(imgp); ]
+    #save initial random reconstruction
+    plot_reconstruction(opt_date, random_reconstructions_directory, params, freqs, Tinit_flat, Tmaps_random, noises_random, plan_nearfar, plan_PSF, weights, noise_multiplier, fftPSFs_init, α_init, parallel, iqi, "initial", "random")
+    
+    #save initial MIT reconstruction
+    plot_reconstruction(opt_date, MIT_reconstructions_directory, params, freqs, Tinit_flat, Tmaps_MIT, noises_MIT, plan_nearfar, plan_PSF, weights, noise_multiplier, fftPSFs_init, α_init, parallel, iqi, "initial", "MIT")
+
+    
+    ################################# OPTIMIZED geoms, alpha, and PSFs #################################
+    println("######################### plotting optimized PSFs, reconstructions #########################")
+    println()
+    
+    geoms_filename = "$(directory)/geoms_optimized_$(opt_date).csv"
+    geoms_optimized = reshape(readdlm(geoms_filename,','),pp.gridL, pp.gridL )
+    
+    if parallel
+        PSFs_optimized = ThreadsX.map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms_optimized, plan_nearfar, parallel),1:pp.orderfreq+1)
+    else
+        PSFs_optimized = map(iF->get_PSF(freqs[iF], surrogates[iF], pp, imgp, geoms_optimized, plan_nearfar, parallel),1:pp.orderfreq+1)
+    end
+    
+    if parallel
+        fftPSFs_optimized = ThreadsX.map(iF->PSF_to_fftPSF(PSFs_optimized[iF], plan_PSF),1:pp.orderfreq+1)
+    else
+        fftPSFs_optimized = map(iF->PSF_to_fftPSF(PSFs_optimized[iF], plan_PSF),1:pp.orderfreq+1)
+    end
+    
+    if optp.optimize_alpha
+        α_optimized = best_alpha_vals[end]
+    else
+        #TO DO: get rid of this case? or add pre-optimizing alpha case here?
+        α_optimized = optp.αinit
+    end
+    
+    #plot optimized PSFs
+    plot_PSFs(opt_date, directory, params, freqs, PSFs_optimized, parallel, "optimized",1,"different_linear")
+    plot_PSFs(opt_date, directory, params, freqs, PSFs_optimized, parallel, "optimized",1,"same_linear")
+    plot_PSFs(opt_date, directory, params, freqs, PSFs_optimized, parallel, "optimized",1,"same_log")
+    
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_optimized, parallel, "optimized",2,"same_linear")
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_optimized, parallel, "optimized",4,"same_linear")
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_optimized, parallel, "optimized",8,"same_linear")
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_optimized, parallel, "optimized",16,"same_linear")
+    
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_optimized, parallel, "optimized",2,"same_log")
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_optimized, parallel, "optimized",4,"same_log")
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_optimized, parallel, "optimized",8,"same_log")
+    plot_PSFs(opt_date, PSFs_directory, params, freqs, PSFs_optimized, parallel, "optimized",16,"same_log")
+   
+    noises_random = prepare_noises(imgp)
+    noises_MIT = [ prepare_noise(imgp); ]
+    #save optimized random reconstruction
+    plot_reconstruction(opt_date, random_reconstructions_directory, params, freqs, Tinit_flat, Tmaps_random, noises_random, plan_nearfar, plan_PSF, weights, noise_multiplier, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "random")
+    
+    #save optimized MIT reconstruction
+    plot_reconstruction(opt_date, MIT_reconstructions_directory, params, freqs, Tinit_flat, Tmaps_MIT, noises_random, plan_nearfar, plan_PSF, weights, noise_multiplier, fftPSFs_optimized, α_optimized, parallel, iqi, "optimized", "MIT")
+    
+    
+    ################################# plot geoms init and optimized side by side #################################
+    println("######################### plotting geoms #########################")
+    println()
+    
+    figure(figsize=(18,8))
+    subplot(1,3,1)
+    imshow( geoms_init , vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("initial metasurface \n parameters")
+    subplot(1,3,2)
+    imshow(geoms_optimized, vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    subplot(1,3,3)
+    imshow(geoms_optimized)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    savefig("$directory/geoms_optimized_$opt_date.png")
+    
+    figure(figsize=(32,10))
+    subplot(1,3,1)
+    imshow( geoms_init , vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("initial metasurface \n parameters")
+    subplot(1,3,2)
+    imshow(geoms_optimized, vmin = pp.lbwidth, vmax = pp.ubwidth)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    subplot(1,3,3)
+    imshow(geoms_optimized)
+    colorbar()
+    title("optimized metasurface \n parameters")
+    savefig("$directory/geoms_optimized_bigger_$opt_date.png")
+    
+    ################################# get transmissions for initial and optimized metasurface #################################
+    println("######################### getting transmissions #########################")
+    println()
+    
+    get_fftPSF_freespace_iF = iF->get_fftPSF_freespace(freqs[iF], surrogates[iF], pp, imgp, plan_nearfar, plan_PSF)
+    if parallel
+        fftPSFs_freespace = ThreadsX.map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
+    else
+        fftPSFs_freespace = map(get_fftPSF_freespace_iF,1:pp.orderfreq+1)
+    end
+    
+    transmission_relative_to_no_lens_initial = get_transmission_relative_to_no_lens(pp, imgp, Tmaps_random[1], fftPSFs_freespace, fftPSFs_init, freqs, weights,  plan_nearfar, plan_PSF, parallel)
+    
+    dict_output_initial = Dict("transmission_relative_to_no_lens" => transmission_relative_to_no_lens_initial)
+    #save output data in json file
+    output_data_filename = "$(directory)/transmissions_initial.json"
+    open(output_data_filename,"w") do io
+        JSON3.pretty(io, dict_output_initial)
+    end
+    
+    transmission_relative_to_no_lens_optimized = get_transmission_relative_to_no_lens(pp, imgp, Tmaps_random[1], fftPSFs_freespace, fftPSFs_optimized, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    
+    transmission_optimized_relative_to_initial = get_optimized_transmission_relative_to_initial(pp, imgp, Tmaps_random[1], fftPSFs_optimized, fftPSFs_init, freqs, weights, plan_nearfar, plan_PSF, parallel)
+    
+    dict_output_optimized = Dict("transmission_relative_to_no_lens" => transmission_relative_to_no_lens_optimized, "transmission_relative_to_initial" => transmission_optimized_relative_to_initial)
+    #save output data in json file
+    output_data_filename = "$(directory)/transmissions_optimized.json"
+    open(output_data_filename,"w") do io
+        JSON3.pretty(io, dict_output_optimized)
+    end
+    
+end
+
 function process_opt(presicion, parallel, opt_date, opt_id, pname)
     directory = "ImagingOpt.jl/optdata/$(opt_id)"
     
@@ -675,6 +969,7 @@ function plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tma
     recp = params.recp
 
     num_Tmaps = length(Tmaps)
+    MSEs = []
     
     figure(figsize=(18,3.5*num_Tmaps))
     suptitle("$(geoms_type) reconstruction")
@@ -701,6 +996,7 @@ function plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tma
         imshow( (Test .- Tmap)./Tmap .* 100)
         colorbar()
         MSE = sum((Tmap .- Test).^2) / sum(Tmap.^2)
+        push!(MSEs, MSE)
         title("% difference \n MSE = $(round(MSE, digits=8))")
         
         ssim_map = ImageQualityIndexes._ssim_map(iqi, Tmap, Test )
@@ -723,6 +1019,9 @@ function plot_reconstruction(opt_date, directory, params, freqs, Tinit_flat, Tma
     end
     tight_layout()
     savefig("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_$(opt_date).png")
+    open("$directory/$(Tmap_type)_reconstruction_$(geoms_type)_$(@sprintf "%.4e" α )_MSEs_$(opt_date).csv", "w") do io
+        writedlm(io, [1:num_Tmaps, MSEs],',')
+    end
 end
 
 function plot_reconstruction_fixed_noise_levels(opt_date, directory, params, freqs, Tinit_flat, Tmap, noise_levels, plan_nearfar, plan_PSF, weights, fftPSFs, α, parallel, iqi, geoms_type, Tmap_type)
