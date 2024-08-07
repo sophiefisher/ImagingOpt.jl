@@ -1,4 +1,4 @@
-function process_opt2(presicion, parallel, opt_dat, opt_id, pname)
+function process_opt2(presicion, parallel, opt_date, opt_id, pname)
     directory = "ImagingOpt.jl/optdata/$(opt_id)"
     
     MIT_reconstructions_directory = "ImagingOpt.jl/optdata/$(opt_id)/MIT_reconstructions"
