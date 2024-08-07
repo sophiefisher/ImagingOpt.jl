@@ -34,7 +34,7 @@ function process_opt2(presicion, parallel, opt_date, opt_id, pname)
     
     Tmaps_random = prepare_objects(imgp, pp) #assuming random Tmaps    
     Tmap_MIT = load_MIT_Tmap(imgp.objL, (imgp.lbT + imgp.ubT)/2, imgp.lbT + (imgp.ubT - imgp.lbT)*(3/4) )
-    
+    Tmaps_MIT = [ Tmap_MIT ]
     ################################# plot objective, alpha, and noise values throughout opt #################################
     println("######################### plotting objective and alpha values #########################")
     println()
