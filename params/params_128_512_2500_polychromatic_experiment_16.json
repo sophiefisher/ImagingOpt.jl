@@ -5,7 +5,7 @@
         "orderλ":16,
         
         "F_μm": 10000,
-        "depth_μm":4e6,
+        "depth_μm":1e10,
         "gridL": 2500,
         
         "cellL_μm":4,
@@ -34,13 +34,16 @@
         "binL": 3,
         "objN": 3,
         "object_type": "random",
-        "lbT":263.15,
-        "ubT":623.15,
+        "lbT":136.15,
+        "ubT":450.15,
         "object_loadfilename":"oval8.csv",
         "object_savefilestring":"random_280_310",
         "noise_level": 0.02,
         "emiss_noise_level":0.00,
-        "differentiate_noise":false
+        "differentiate_noise":true,
+        "noise_multiplier_type":"value",
+        "noise_multiplier_loadfilename":"geoms_2024-06-26T23_32_16.897_NLOPT_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_3_1.0e-9_500.csv",
+        "noise_multiplier":0.143
         
     },
     "optp": {
@@ -56,15 +59,15 @@
         "cg_maxiter_factor":4,
         "pre_optimize_alpha":true,
         "optimize_alpha":true,
-        "η": 1e-3,
+        "η": 1e-2,
         "eval_test_data":true
         
     },
     "recp": {
         "T_init_type":"uniform",
-        "T_init_uniform_val":443.15,
+        "T_init_uniform_val":293.15,
         "ftol_rel":1e-10,
         "geoms_init_savefilestring":"minimax_1.00e-06_500",
-        "subtract_reg":443.15
+        "subtract_reg":293.15
     }
 }
