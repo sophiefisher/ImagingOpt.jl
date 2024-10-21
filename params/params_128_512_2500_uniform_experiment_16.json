@@ -24,7 +24,7 @@
         "models_dir": "ImagingOpt.jl/surdata", 
         
         "blackbody_scaling": 1,
-        "PSF_scaling":1e10,
+        "PSF_scaling":1e17,
         "nG":1000
     },
  
