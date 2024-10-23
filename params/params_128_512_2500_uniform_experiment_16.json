@@ -57,7 +57,7 @@
         "saveeval":300,
         "xtol_rel":0,
         "cg_maxiter_factor":4,
-        "pre_optimize_alpha":true,
+        "pre_optimize_alpha":false,
         "optimize_alpha":true,
         "η": 1e-2,
         "eval_test_data":true

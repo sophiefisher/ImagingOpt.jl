@@ -48,7 +48,7 @@
     },
     "optp": {
         "geoms_init_type":"load",
-        "geoms_init_loadfilename":"geoms_2024-04-22T20_23_36.047_NLOPT_singlefreq_lens_8.0_11.0_16_4.0_2500_640_128_512_3_1.0e-8_500.csv",
+        "geoms_init_loadfilename":"geoms_2024-10-21T11_13_30.543_NLOPT_singlefreq_lens_8.0_11.0_16_4.0_2500_640_128_512_3_1.0e-9_500.csv",
         "geoms_init_loadsavename":"singlefreq",
         "αinit":1e-4,
         "α_scaling":1,
