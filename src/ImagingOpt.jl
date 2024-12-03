@@ -9,6 +9,7 @@ prepare_noise_multiplier, prepare_weights
     export arrarr_to_multi
     export get_params, print_params, get_α, compute_system_params, compute_obj_and_grad, run_opt, design_singlefreq_lens_NLOPT, design_singlefreq_lens_OPTIM, design_achromatic_lens, design_multifocal_lens, design_polychromatic_lens, design_oscillatory_lens
     export process_opt, process_opt2, load_MIT_Tmap, plot_objective_vals, plot_alpha_vals, plot_reconstruction_fixed_noise_levels, plot_reconstruction_different_alpha_vals
+
     
     using FFTW
     using Distributed
@@ -55,6 +56,7 @@ prepare_noise_multiplier, prepare_weights
     using LineSearches
     using Interpolations
     using Peaks
+    
 
     include("prepare.jl")
     include("utils.jl")

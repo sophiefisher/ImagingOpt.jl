@@ -1,7 +1,6 @@
 # collection of useful jobs to run on a params file
 
 ### Projecting a tuple to SMatrix leads to ChainRulesCore._projection_mismatch by default, so overloaded here
-#=
 function (project::ChainRulesCore.ProjectTo{<:Tangent{<:Tuple}})(dx::SArray)
     dy = reshape(dx, axes(project.elements))  # allows for dx::OffsetArray
     dz = ntuple(i -> project.elements[i](dy[i]), length(project.elements))
@@ -23,7 +22,6 @@ function ChainRulesCore.rrule(::Type{T}, x::Tuple) where {T<:SArray}
     Array_pullback(ȳ) = (NoTangent(), project_x(ȳ))
     return T(x), Array_pullback
 end
-=#
 
 StructTypes.StructType(::Type{PhysicsParams}) = StructTypes.Struct()
 StructTypes.StructType(::Type{ImagingParams}) = StructTypes.Struct()
