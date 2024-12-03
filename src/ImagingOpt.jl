@@ -25,7 +25,6 @@ prepare_noise_multiplier, prepare_weights
     using Statistics
     using Setfield
     using StructTypes
-    using Glob
     using JSON3
     using Dates
     using Optimisers
@@ -36,12 +35,9 @@ prepare_noise_multiplier, prepare_weights
     using ShiftedArrays
     using Augmentor
     using TestImages
-    using MAT
     using FastChebInterp
     using QuadratureRules
     using Profile
-    using StatProfilerHTML
-    using ProfileVega
     using WavePropagation
     using ChainRulesCore
     using StaticArrays
