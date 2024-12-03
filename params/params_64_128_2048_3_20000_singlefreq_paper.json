@@ -1,12 +1,12 @@
 {
     "pp": {
         "lbλ_μm":8,
-        "ubλ_μm":11,
-        "orderλ":16,
+        "ubλ_μm":12,
+        "orderλ":20,
         
-        "F_μm": 24000,
-        "depth_μm":1e10,
-        "gridL": 2500,
+        "F_μm": 20000,
+        "depth_μm":10000000,
+        "gridL": 2048,
         
         "cellL_μm":4,
         "lbwidth_μm":1.8,
@@ -29,16 +29,16 @@
     },
  
     "imgp": {
-        "objL": 128,
-        "imgL": 512,
+        "objL": 64,
+        "imgL": 128,
         "binL": 3,
-        "objN": 1,
+        "objN": 3,
         "object_type": "random",
-        "lbT":136.15,
-        "ubT":450.15,
+        "lbT":263.15,
+        "ubT":623.15,
         "object_loadfilename":"oval8.csv",
         "object_savefilestring":"random_280_310",
-        "noise_level": 0.02,
+        "noise_level": 0.06,
         "emiss_noise_level":0.00,
         "differentiate_noise":true,
         "noise_multiplier_type":"value",
@@ -48,9 +48,9 @@
     },
     "optp": {
         "geoms_init_type":"load",
-        "geoms_init_loadfilename":"geoms_2024-10-21T11_13_30.543_NLOPT_singlefreq_lens_8.0_11.0_16_4.0_2500_640_128_512_3_1.0e-9_500.csv",
+        "geoms_init_loadfilename":"geoms_2024-06-26T23_32_16.897_NLOPT_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_3_1.0e-9_500.csv",
         "geoms_init_loadsavename":"singlefreq",
-        "αinit":1e-4,
+        "αinit":1e-7,
         "α_scaling":1,
         "α_lb":0,
         "maxeval":6000,
@@ -65,9 +65,9 @@
     },
     "recp": {
         "T_init_type":"uniform",
-        "T_init_uniform_val":293.15,
+        "T_init_uniform_val":443.15,
         "ftol_rel":1e-10,
         "geoms_init_savefilestring":"minimax_1.00e-06_500",
-        "subtract_reg":293.15
+        "subtract_reg":443.15
     }
 }

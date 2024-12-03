@@ -4,7 +4,7 @@
         "ubλ_μm":11,
         "orderλ":16,
         
-        "F_μm": 10000,
+        "F_μm": 24000,
         "depth_μm":1e10,
         "gridL": 2500,
         
@@ -32,7 +32,7 @@
         "objL": 128,
         "imgL": 512,
         "binL": 3,
-        "objN": 3,
+        "objN": 1,
         "object_type": "random",
         "lbT":136.15,
         "ubT":450.15,

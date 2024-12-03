@@ -4,7 +4,7 @@
         "ubλ_μm":11,
         "orderλ":16,
         
-        "F_μm": 24000,
+        "F_μm": 48000,
         "depth_μm":1e10,
         "gridL": 2500,
         
@@ -24,14 +24,14 @@
         "models_dir": "ImagingOpt.jl/surdata", 
         
         "blackbody_scaling": 1,
-        "PSF_scaling":1e10,
+        "PSF_scaling":1e17,
         "nG":1000
     },
  
     "imgp": {
         "objL": 128,
-        "imgL": 512,
-        "binL": 3,
+        "imgL": 256,
+        "binL": 6,
         "objN": 1,
         "object_type": "random",
         "lbT":136.15,
@@ -47,9 +47,9 @@
         
     },
     "optp": {
-        "geoms_init_type":"load",
-        "geoms_init_loadfilename":"geoms_2024-10-21T11_13_30.543_NLOPT_singlefreq_lens_8.0_11.0_16_4.0_2500_640_128_512_3_1.0e-9_500.csv",
-        "geoms_init_loadsavename":"singlefreq",
+        "geoms_init_type":"uniform",
+        "geoms_init_loadfilename":"geoms_singlefreq_lens_2024-01-01T23_41_06.371_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_7.csv",
+        "geoms_init_loadsavename":"uniform",
         "αinit":1e-4,
         "α_scaling":1,
         "α_lb":0,
@@ -57,7 +57,7 @@
         "saveeval":300,
         "xtol_rel":0,
         "cg_maxiter_factor":4,
-        "pre_optimize_alpha":true,
+        "pre_optimize_alpha":false,
         "optimize_alpha":true,
         "η": 1e-2,
         "eval_test_data":true
