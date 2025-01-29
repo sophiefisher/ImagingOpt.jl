@@ -24,12 +24,12 @@
         "models_dir": "ImagingOpt.jl/surdata", 
         
         "blackbody_scaling": 1,
-        "PSF_scaling":1e17,
+        "PSF_scaling":1e10,
         "nG":1000
     },
  
     "imgp": {
-        "objL": 128,
+        "objL": 256,
         "imgL": 512,
         "binL": 3,
         "objN": 1,

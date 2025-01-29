@@ -4,7 +4,7 @@
         "ubλ_μm":11,
         "orderλ":16,
         
-        "F_μm": 24000,
+        "F_μm": 48000,
         "depth_μm":1e10,
         "gridL": 2500,
         
@@ -30,8 +30,8 @@
  
     "imgp": {
         "objL": 128,
-        "imgL": 512,
-        "binL": 3,
+        "imgL": 256,
+        "binL": 6,
         "objN": 1,
         "object_type": "random",
         "lbT":136.15,
@@ -48,9 +48,9 @@
     },
     "optp": {
         "geoms_init_type":"load",
-        "geoms_init_loadfilename":"geoms_2024-12-03T19_04_39.874_NLOPT_singlefreq_lens_8.0_11.0_16_4.0_2500_640_128_512_3_1.0e-9_500.csv",
+        "geoms_init_loadfilename":"geoms_2024-12-17T18_44_56.557_NLOPT_singlefreq_lens_8.0_11.0_16_4.0_2500_640_128_256_6_1.0e-9_600.csv",
         "geoms_init_loadsavename":"singlefreq",
-        "αinit":1e-4,
+        "αinit":1e-7,
         "α_scaling":1,
         "α_lb":0,
         "maxeval":6000,
@@ -66,7 +66,7 @@
     "recp": {
         "T_init_type":"uniform",
         "T_init_uniform_val":293.15,
-        "ftol_rel":1e-12,
+        "ftol_rel":1e-10,
         "geoms_init_savefilestring":"minimax_1.00e-06_500",
         "subtract_reg":293.15
     }
