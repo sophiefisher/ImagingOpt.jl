@@ -4,7 +4,7 @@
         "ubλ_μm":11,
         "orderλ":16,
         
-        "F_μm": 32000,
+        "F_μm": 45000,
         "depth_μm":1e10,
         "gridL": 2500,
         
@@ -50,7 +50,7 @@
         "geoms_init_type":"uniform",
         "geoms_init_loadfilename":"geoms_singlefreq_lens_2024-01-01T23_41_06.371_singlefreq_lens_8.0_12.0_20_4.0_2048_640_32_64_7.csv",
         "geoms_init_loadsavename":"uniform",
-        "αinit":1e-4,
+        "αinit":1e-7,
         "α_scaling":1,
         "α_lb":0,
         "maxeval":6000,
